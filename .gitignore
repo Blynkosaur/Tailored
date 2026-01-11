@@ -1,2 +1,8 @@
 pyproject.toml
 resume/
+
+# Environment variables
+.env
+
+# macOS
+.DS_Store
