@@ -3,13 +3,18 @@ import json
 import re
 
 
-def fetch_page_text(url: str) -> tuple[str, dict]:
+def fetch_page_text(url: str, timeout: int = 30000) -> tuple[str, dict]:
     """Fetch fully rendered page and extract all visible text + JSON-LD data."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto(url)
-        page.wait_for_load_state("networkidle")
+        page.set_default_timeout(timeout)
+        
+        # Navigate and wait for DOM to be ready
+        page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+        
+        # Short wait for JS to render content
+        page.wait_for_timeout(3000)
         
         # Get all visible text from the page
         visible_text = page.evaluate("""

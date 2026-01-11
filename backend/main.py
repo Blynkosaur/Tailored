@@ -82,11 +82,17 @@ def generate_cover_letter_latex(resume_text: str, job_description: str) -> str:
     Returns:
         LaTeX source code for the cover letter.
     """
-    user_message = f"""Resume:
+    user_message = f"""=== CANDIDATE'S RESUME (use this for the candidate's background) ===
 {resume_text}
 
-Job Description:
-{job_description}"""
+=== END OF RESUME ===
+
+=== JOB DESCRIPTION (use this for the target position) ===
+{job_description}
+
+=== END OF JOB DESCRIPTION ===
+
+Generate a cover letter for the CANDIDATE applying to the JOB above."""
 
     response = client.models.generate_content(
         model="gemini-2.0-flash",
@@ -163,8 +169,14 @@ def format_job_for_prompt(job_data: dict) -> str:
         parts.append(f"\nSkills Mentioned: {', '.join(job_data['skills_mentioned'])}")
     
     # If we didn't extract much structured data, fall back to raw text
-    if len(parts) < 3 and job_data.get("raw_text"):
-        parts.append(f"\nFull Job Posting Text:\n{job_data['raw_text'][:5000]}")
+    has_content = any([
+        job_data.get("responsibilities"),
+        job_data.get("requirements"),
+        job_data.get("about_company"),
+    ])
+    if not has_content and job_data.get("raw_text"):
+        # Use raw text if structured parsing failed
+        parts.append(f"\nFull Job Posting Text:\n{job_data['raw_text'][:8000]}")
     
     return "\n".join(parts)
 
