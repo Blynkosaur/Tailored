@@ -1,5 +1,5 @@
 #Resumes
-../resume/*
+# Note: resume folder is ignored in root .gitignore
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
