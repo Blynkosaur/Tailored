@@ -1,6 +1,9 @@
 #Resumes
 # Note: resume folder is ignored in root .gitignore
 
+# Virtual environment
+venv/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
