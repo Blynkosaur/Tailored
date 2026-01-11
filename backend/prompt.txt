@@ -29,18 +29,21 @@ Generate a compelling cover letter that:
 
 \documentclass{article}
 
-\usepackage{charter}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\color{black}
 
 \usepackage[
   a4paper,
-  top=1in,
-  bottom=1in,
+  top=0.75in,
+  bottom=0.75in,
   left=1in,
   right=1in,
 ]{geometry}
 
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{1em}
+\setlength{\parskip}{0.8em}
 
 \usepackage{graphicx}
 
@@ -69,7 +72,7 @@ Generate a compelling cover letter that:
 
 \rule{\linewidth}{1pt}
 
-\bigskip\bigskip
+\bigskip
 
 \hfill
 \begin{tabular}{l @{}}
@@ -105,7 +108,7 @@ Dear [Hiring Manager Name or "Hiring Manager"],
 
 Sincerely yours,
 
-\vspace{50pt}
+\vspace{24pt}
 
 % Candidate name from resume
 
