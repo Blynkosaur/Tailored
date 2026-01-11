@@ -219,74 +219,94 @@ def extract_basic_info(text: str, json_ld: dict) -> dict:
         "work_arrangement": None,
     }
     
-    # Try JSON-LD first
+    # Try JSON-LD first (wrapped in try-except for safety)
     if json_ld:
-        info["title"] = json_ld.get("title")
-        info["employment_type"] = json_ld.get("employmentType")
+        try:
+            info["title"] = json_ld.get("title")
+            info["employment_type"] = json_ld.get("employmentType")
+        except Exception:
+            pass
         
-        if "hiringOrganization" in json_ld:
-            org = json_ld["hiringOrganization"]
-            if isinstance(org, dict):
-                info["company"] = org.get("name")
-            elif isinstance(org, str):
-                info["company"] = org
+        try:
+            if "hiringOrganization" in json_ld:
+                org = json_ld["hiringOrganization"]
+                if isinstance(org, dict):
+                    info["company"] = org.get("name")
+                elif isinstance(org, str):
+                    info["company"] = org
+        except Exception:
+            pass
         
-        if "jobLocation" in json_ld:
-            loc = json_ld["jobLocation"]
-            if isinstance(loc, dict) and "address" in loc:
-                addr = loc["address"]
-                if isinstance(addr, dict):
-                    parts = [
-                        addr.get("addressLocality"),
-                        addr.get("addressRegion"),
-                        addr.get("addressCountry")
-                    ]
-                    info["location"] = ", ".join(p for p in parts if p)
-                elif isinstance(addr, str):
-                    info["location"] = addr
+        try:
+            if "jobLocation" in json_ld:
+                loc = json_ld["jobLocation"]
+                # Handle list of locations
+                if isinstance(loc, list) and len(loc) > 0:
+                    loc = loc[0]
+                if isinstance(loc, dict) and "address" in loc:
+                    addr = loc["address"]
+                    if isinstance(addr, dict):
+                        parts = []
+                        for key in ["addressLocality", "addressRegion", "addressCountry"]:
+                            val = addr.get(key)
+                            if isinstance(val, str):
+                                parts.append(val)
+                            elif isinstance(val, dict) and "name" in val:
+                                parts.append(val["name"])
+                        info["location"] = ", ".join(parts) if parts else None
+                    elif isinstance(addr, str):
+                        info["location"] = addr
+        except Exception:
+            pass
         
-        if "baseSalary" in json_ld:
-            salary = json_ld["baseSalary"]
-            if isinstance(salary, dict) and "value" in salary:
-                val = salary["value"]
-                if isinstance(val, dict):
-                    min_val = val.get("minValue", 0)
-                    max_val = val.get("maxValue", 0)
-                    unit = val.get("unitText", "YEAR")
-                    if min_val or max_val:
-                        info["salary"] = f"${min_val:,} - ${max_val:,} per {unit.lower()}"
+        try:
+            if "baseSalary" in json_ld:
+                salary = json_ld["baseSalary"]
+                if isinstance(salary, dict) and "value" in salary:
+                    val = salary["value"]
+                    if isinstance(val, dict):
+                        min_val = val.get("minValue", 0)
+                        max_val = val.get("maxValue", 0)
+                        unit = val.get("unitText", "YEAR")
+                        if min_val or max_val:
+                            info["salary"] = f"${min_val:,} - ${max_val:,} per {unit.lower()}"
+        except Exception:
+            pass
     
     # Extract from text if not found
-    text_lower = text.lower()
-    
-    # Work arrangement
-    if "remote" in text_lower and "hybrid" not in text_lower:
-        info["work_arrangement"] = "Remote"
-    elif "hybrid" in text_lower:
-        hybrid_match = re.search(r'(\d+)\s*days?\s*(?:per\s*week|/\s*week)?\s*(?:in\s*)?(?:office|on-?site)', text, re.IGNORECASE)
-        if hybrid_match:
-            info["work_arrangement"] = f"Hybrid ({hybrid_match.group(1)} days/week in office)"
-        else:
-            info["work_arrangement"] = "Hybrid"
-    elif "on-site" in text_lower or "onsite" in text_lower or "in-office" in text_lower:
-        info["work_arrangement"] = "On-site"
-    
-    # Salary from text if not in JSON-LD
-    if not info["salary"]:
-        salary_patterns = [
-            r'\$\s*([\d,]+)\s*(?:[-–]\s*\$?\s*([\d,]+))?\s*(?:per\s+|/\s*)?(year|yr|annually|hour|hr|hourly|month|monthly)',
-            r'(?:salary|compensation|pay)[:\s]*\$\s*([\d,]+)\s*(?:[-–]\s*\$?\s*([\d,]+))?',
-        ]
-        for pattern in salary_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                if match.lastindex >= 2 and match.group(2):
-                    info["salary"] = f"${match.group(1)} - ${match.group(2)}"
-                else:
-                    info["salary"] = f"${match.group(1)}"
-                if match.lastindex >= 3 and match.group(3):
-                    info["salary"] += f" per {match.group(3)}"
-                break
+    try:
+        text_lower = text.lower() if text else ""
+        
+        # Work arrangement
+        if "remote" in text_lower and "hybrid" not in text_lower:
+            info["work_arrangement"] = "Remote"
+        elif "hybrid" in text_lower:
+            hybrid_match = re.search(r'(\d+)\s*days?\s*(?:per\s*week|/\s*week)?\s*(?:in\s*)?(?:office|on-?site)', text, re.IGNORECASE)
+            if hybrid_match:
+                info["work_arrangement"] = f"Hybrid ({hybrid_match.group(1)} days/week in office)"
+            else:
+                info["work_arrangement"] = "Hybrid"
+        elif "on-site" in text_lower or "onsite" in text_lower or "in-office" in text_lower:
+            info["work_arrangement"] = "On-site"
+        
+        # Salary from text if not in JSON-LD
+        if not info["salary"]:
+            salary_patterns = [
+                r'\$\s*([\d,]+)\s*(?:[-–]\s*\$?\s*([\d,]+))?\s*(?:per\s+|/\s*)?(year|yr|annually|hour|hr|hourly|month|monthly)',
+                r'(?:salary|compensation|pay)[:\s]*\$\s*([\d,]+)\s*(?:[-–]\s*\$?\s*([\d,]+))?',
+            ]
+            for pattern in salary_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    if match.lastindex >= 2 and match.group(2):
+                        info["salary"] = f"${match.group(1)} - ${match.group(2)}"
+                    else:
+                        info["salary"] = f"${match.group(1)}"
+                    if match.lastindex >= 3 and match.group(3):
+                        info["salary"] += f" per {match.group(3)}"
+                    break
+    except Exception:
+        pass
     
     return info
 
@@ -294,34 +314,60 @@ def extract_basic_info(text: str, json_ld: dict) -> dict:
 def scrape_job_posting(url: str) -> dict:
     """Scrape a job posting and extract all useful information."""
     
-    # Fetch page text and any JSON-LD data
-    text, json_ld = fetch_page_text(url)
-    
-    # Extract basic info
-    basic_info = extract_basic_info(text, json_ld)
-    
-    # Parse sections from text
-    sections = parse_job_text(text)
-    
-    # Extract skills
-    skills = extract_skills(text)
-    
-    # Build result
+    # Default empty result
     job_data = {
         "url": url,
-        "title": basic_info["title"],
-        "company": basic_info["company"],
-        "location": basic_info["location"],
-        "employment_type": basic_info["employment_type"],
-        "salary": basic_info["salary"],
-        "work_arrangement": basic_info["work_arrangement"],
-        "responsibilities": sections["responsibilities"],
-        "requirements": sections["requirements"],
-        "preferred_qualifications": sections["preferred"],
-        "benefits": sections["benefits"],
-        "about_company": sections["about_company"],
-        "skills_mentioned": skills,
+        "title": None,
+        "company": None,
+        "location": None,
+        "employment_type": None,
+        "salary": None,
+        "work_arrangement": None,
+        "responsibilities": [],
+        "requirements": [],
+        "preferred_qualifications": [],
+        "benefits": [],
+        "about_company": [],
+        "skills_mentioned": [],
+        "raw_text": "",
     }
+    
+    try:
+        # Fetch page text and any JSON-LD data
+        text, json_ld = fetch_page_text(url)
+        job_data["raw_text"] = text or ""
+        
+        # Extract basic info
+        try:
+            basic_info = extract_basic_info(text, json_ld)
+            job_data["title"] = basic_info.get("title")
+            job_data["company"] = basic_info.get("company")
+            job_data["location"] = basic_info.get("location")
+            job_data["employment_type"] = basic_info.get("employment_type")
+            job_data["salary"] = basic_info.get("salary")
+            job_data["work_arrangement"] = basic_info.get("work_arrangement")
+        except Exception as e:
+            print(f"Warning: Failed to extract basic info: {e}")
+        
+        # Parse sections from text
+        try:
+            sections = parse_job_text(text)
+            job_data["responsibilities"] = sections.get("responsibilities", [])
+            job_data["requirements"] = sections.get("requirements", [])
+            job_data["preferred_qualifications"] = sections.get("preferred", [])
+            job_data["benefits"] = sections.get("benefits", [])
+            job_data["about_company"] = sections.get("about_company", [])
+        except Exception as e:
+            print(f"Warning: Failed to parse job sections: {e}")
+        
+        # Extract skills
+        try:
+            job_data["skills_mentioned"] = extract_skills(text)
+        except Exception as e:
+            print(f"Warning: Failed to extract skills: {e}")
+            
+    except Exception as e:
+        print(f"Warning: Failed to fetch page: {e}")
     
     return job_data
 

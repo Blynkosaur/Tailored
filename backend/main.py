@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -107,6 +108,15 @@ Job Description:
             lines = lines[1:]
         latex_content = "\n".join(lines)
 
+    # Fix common LaTeX escaping issues
+    # Escape & that aren't already escaped (not preceded by \)
+    latex_content = re.sub(r'(?<!\\)&', r'\\&', latex_content)
+    # Escape % only when it appears after a digit (like "26%") - not at end of lines
+    latex_content = re.sub(r'(\d)%', r'\1\\%', latex_content)
+    # Fix double escapes that might have been created
+    latex_content = latex_content.replace('\\\\&', '\\&')
+    latex_content = latex_content.replace('\\\\%', '\\%')
+
     return latex_content
 
 
@@ -152,6 +162,10 @@ def format_job_for_prompt(job_data: dict) -> str:
     if job_data.get("skills_mentioned"):
         parts.append(f"\nSkills Mentioned: {', '.join(job_data['skills_mentioned'])}")
     
+    # If we didn't extract much structured data, fall back to raw text
+    if len(parts) < 3 and job_data.get("raw_text"):
+        parts.append(f"\nFull Job Posting Text:\n{job_data['raw_text'][:5000]}")
+    
     return "\n".join(parts)
 
 
@@ -183,6 +197,18 @@ def generate_cover_letter(
     
     print(f"🤖 Generating cover letter with AI...")
     latex_content = generate_cover_letter_latex(resume_text, job_description)
+    
+    # Debug: Print the generated LaTeX
+    print("\n" + "=" * 60)
+    print("GENERATED LATEX:")
+    print("=" * 60)
+    print(latex_content)
+    print("=" * 60 + "\n")
+    
+    # Also save the LaTeX to a file for inspection
+    latex_debug_path = RESUME_DIR / "cover_letter_debug.tex"
+    latex_debug_path.write_text(latex_content)
+    print(f"📄 LaTeX saved to: {latex_debug_path}")
     
     print(f"📝 Compiling LaTeX to PDF...")
     pdf_bytes = compile_latex(latex_content)
