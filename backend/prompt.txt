@@ -122,3 +122,17 @@ Sincerely yours,
 - Replace ALL comments in the template with real content from the inputs
 - Keep the tone professional and authentic, not generic or templated
 - Ensure the LaTeX compiles without errors using pdflatex
+
+## CRITICAL: Handling Missing Information
+- NEVER output bracketed text like "[I am unable to...]" or "[Company mission not provided]" or any similar explanations
+- NEVER explain what information is missing—just write around it
+- If company mission/values are unknown: Focus on the role itself, the technical challenges, or general industry enthusiasm
+- If specific company details are unavailable: Write about the position, team, or opportunity instead
+- If hiring manager name is unknown: Use "Hiring Manager" without any bracketed notes
+- Always write complete, natural sentences. If you can't say something specific, say something genuine and general instead.
+
+Example of WRONG approach:
+"I am excited about [company mission not available] and want to contribute..."
+
+Example of CORRECT approach:
+"I am excited about the opportunity to contribute to your engineering team and tackle challenging technical problems..."
