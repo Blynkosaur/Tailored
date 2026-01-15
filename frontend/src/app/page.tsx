@@ -4,17 +4,29 @@ import { useState } from "react";
 
 type InputMode = "url" | "text";
 
+const API_URL = "http://localhost:8000";
+
 export default function Home() {
   const [inputMode, setInputMode] = useState<InputMode>("url");
   const [jobUrl, setJobUrl] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleResumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === "application/pdf") {
       setResumeFile(file);
+    }
+  };
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      setLogoFile(file);
     }
   };
 
@@ -33,17 +45,64 @@ export default function Home() {
     }
 
     setIsGenerating(true);
-    // TODO: Connect to backend
-    console.log("Generating cover letter...", {
-      inputMode,
-      jobUrl,
-      jobDescription,
-      resumeFile: resumeFile.name,
-    });
+    setError(null);
+    setPdfUrl(null);
 
-    setTimeout(() => {
+    try {
+      const formData = new FormData();
+      formData.append("resume", resumeFile);
+      
+      if (logoFile) {
+        formData.append("logo", logoFile);
+      }
+      
+      if (inputMode === "url") {
+        formData.append("job_url", jobUrl);
+      } else {
+        formData.append("job_description", jobDescription);
+      }
+
+      const response = await fetch(`${API_URL}/generate`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || "Failed to generate cover letter");
+      }
+
+      const data = await response.json();
+      
+      // Convert base64 to blob URL
+      const pdfBlob = base64ToBlob(data.pdf, "application/pdf");
+      const url = URL.createObjectURL(pdfBlob);
+      setPdfUrl(url);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
       setIsGenerating(false);
-    }, 2000);
+    }
+  };
+
+  const base64ToBlob = (base64: string, mimeType: string): Blob => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
+  };
+
+  const handleDownload = () => {
+    if (pdfUrl) {
+      const a = document.createElement("a");
+      a.href = pdfUrl;
+      a.download = "cover_letter.pdf";
+      a.click();
+    }
   };
 
   const isFormValid =
@@ -51,7 +110,9 @@ export default function Home() {
 
   return (
     <div className="max-w-xl mx-auto p-8">
-      <h1 className="text-2xl font-bold mb-6">Tailored</h1>
+      <h1 className="text-4xl font-bold mb-6 font-[family-name:var(--font-shizuru)]">
+        Tailored
+      </h1>
 
       {/* Job Input */}
       <div className="mb-6">
@@ -100,7 +161,7 @@ export default function Home() {
           id="resume-upload"
           type="file"
           accept=".pdf"
-          onChange={handleFileChange}
+          onChange={handleResumeChange}
           className="hidden"
         />
         <button
@@ -112,6 +173,27 @@ export default function Home() {
         </button>
       </div>
 
+      {/* School Logo Upload */}
+      <div className="mb-6">
+        <label className="block mb-2 font-medium">
+          School Logo (UWaterloo default)
+        </label>
+        <input
+          id="logo-upload"
+          type="file"
+          accept="image/*"
+          onChange={handleLogoChange}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => document.getElementById("logo-upload")?.click()}
+          className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+        >
+          {logoFile ? logoFile.name : "Upload Logo"}
+        </button>
+      </div>
+
       {/* Generate Button */}
       <button
         onClick={handleGenerate}
@@ -120,6 +202,33 @@ export default function Home() {
       >
         {isGenerating ? "Generating..." : "Generate Cover Letter"}
       </button>
+
+      {/* Error Message */}
+      {error && (
+        <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-xl">
+          {error}
+        </div>
+      )}
+
+      {/* PDF Result */}
+      {pdfUrl && (
+        <div className="mt-6">
+          <div className="flex justify-between items-center mb-2">
+            <span className="font-medium">Your Cover Letter</span>
+            <button
+              onClick={handleDownload}
+              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              Download PDF
+            </button>
+          </div>
+          <iframe
+            src={pdfUrl}
+            className="w-full h-[600px] border rounded-xl"
+            title="Cover Letter PDF"
+          />
+        </div>
+      )}
     </div>
   );
 }

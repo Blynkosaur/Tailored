@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
-import { Comfortaa } from "next/font/google";
+import { Comfortaa, Shizuru } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
 const comfortaa = Comfortaa({
   variable: "--font-comfortaa",
+  subsets: ["latin"],
+});
+
+const shizuru = Shizuru({
+  variable: "--font-shizuru",
+  weight: "400",
   subsets: ["latin"],
 });
 
@@ -21,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${comfortaa.variable} antialiased font-sans`}
+        className={`${comfortaa.variable} ${shizuru.variable} antialiased font-sans`}
       >
         <main>{children}</main>
         <Toaster />
