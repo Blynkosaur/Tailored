@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import re
@@ -25,6 +26,75 @@ COVER_LETTER_SYSTEM_PROMPT = PROMPT_PATH.read_text() if PROMPT_PATH.exists() els
 
 # Initialize Gemini client (uses GEMINI_API_KEY from .env)
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+
+def get_company_info(job_description: str) -> dict:
+    """
+    Call Gemini API to extract company name and research what the company does.
+    
+    Args:
+        job_description: The job posting description containing company name.
+        
+    Returns:
+        Dictionary with company name and description.
+    """
+    system_prompt = """You are a company research assistant with knowledge of real companies. Given a job description, identify the company and provide SPECIFIC, FACTUAL information about them.
+
+Your task:
+1. Identify the company name from the job description
+2. Using your knowledge of this company, provide CONCRETE details about:
+   - What specific products or services they offer (name actual products if possible)
+   - What industry they operate in (e.g., fintech, e-commerce, SaaS, etc.)
+   - Who their customers are (consumers, businesses, etc.)
+   - What makes them notable or unique in their market
+
+Respond in this exact JSON format (no markdown, no code fences):
+{
+    "company_name": "Company Name Here",
+    "description": "Specific description with actual products, services, and industry details..."
+}
+
+IMPORTANT: 
+- Do NOT give vague descriptions like "a technology company" or "offers software solutions"
+- Give SPECIFIC details like "Super.com is a fintech app that helps users save money through discounted hotel bookings, buy-now-pay-later services, and a cashback savings account"
+- If you know the company, use your real knowledge about them
+- Be factual and specific about their actual business model and offerings"""
+
+    user_message = f"""Identify the company in this job description and tell me specifically what they do (their actual products, services, industry, and customers):
+
+{job_description}"""
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=user_message,
+        config={
+            "system_instruction": system_prompt,
+            "temperature": 0.5,
+        },
+    )
+
+    # Parse the JSON response
+    response_text = response.text.strip()
+    
+    # Strip markdown code fences if present
+    if response_text.startswith("```"):
+        lines = response_text.split("\n")
+        if lines[-1].strip() == "```":
+            lines = lines[1:-1]
+        else:
+            lines = lines[1:]
+        response_text = "\n".join(lines)
+    
+    try:
+        company_info = json.loads(response_text)
+    except json.JSONDecodeError:
+        # Fallback if JSON parsing fails
+        company_info = {
+            "company_name": "the company",
+            "description": ""
+        }
+    
+    return company_info
 
 
 def compile_latex(latex_content: str) -> bytes:
@@ -75,6 +145,8 @@ def generate_cover_letter_latex(resume_text: str, job_description: str) -> str:
     """
     Call Gemini API to generate LaTeX cover letter code.
     
+    First fetches company description via Gemini, then generates the cover letter.
+    
     Args:
         resume_text: The candidate's resume as plain text.
         job_description: The job posting description.
@@ -82,7 +154,24 @@ def generate_cover_letter_latex(resume_text: str, job_description: str) -> str:
     Returns:
         LaTeX source code for the cover letter.
     """
-    user_message = f"""=== CANDIDATE'S RESUME (use this for the candidate's background) ===
+    # First call: Get company description
+    print("🔍 Researching company description...")
+    company_info = get_company_info(job_description)
+    print(f"   Company: {company_info.get('company_name', 'Unknown')}")
+    print(f"   Description: {company_info.get('description', 'N/A')[:100]}...")
+    
+    # Build company context section
+    company_context = f"""=== COMPANY RESEARCH (use this to personalize the cover letter) ===
+Company Name: {company_info.get('company_name', 'Unknown')}
+
+Company Description: {company_info.get('description', 'Not available')}
+
+=== END OF COMPANY RESEARCH ===
+
+"""
+    
+    # Second call: Generate the cover letter with company context
+    user_message = f"""{company_context}=== CANDIDATE'S RESUME (use this for the candidate's background) ===
 {resume_text}
 
 === END OF RESUME ===
@@ -92,7 +181,7 @@ def generate_cover_letter_latex(resume_text: str, job_description: str) -> str:
 
 === END OF JOB DESCRIPTION ===
 
-Generate a cover letter for the CANDIDATE applying to the JOB above."""
+Generate a cover letter for the CANDIDATE applying to the JOB above. Use the company description to demonstrate knowledge of the company."""
 
     response = client.models.generate_content(
         model="gemini-2.0-flash",
