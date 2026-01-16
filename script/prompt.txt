@@ -81,7 +81,6 @@ Generate a compelling cover letter that:
   \today \bigskip\\
   % Candidate name from resume
   % Candidate address from resume
-  % Phone: candidate phone from resume
   % Email: candidate email from resume
 \end{tabular}
 

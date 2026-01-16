@@ -22,10 +22,16 @@ Generate a compelling cover letter that:
 ## LaTeX Requirements
 - Output ONLY valid, compilable LaTeX code—no markdown, no explanations, no code fences
 - Use the EXACT template structure provided below
-- Extract candidate name, contact info from the resume
 - Extract company name, hiring manager (if available), and address from the job description
 - If hiring manager name is not provided, use "Hiring Manager" as the addressee
 - If company address is not provided, omit the address lines but keep company name
+
+## Contact Info Rules (CRITICAL)
+The candidate's contact info is provided in a separate "CANDIDATE CONTACT INFO" section.
+- Use ONLY the name and email from that section
+- Do NOT extract contact info from the resume - it has already been extracted for you
+- Do NOT include LinkedIn, GitHub, portfolio, website, or any URLs
+- Do NOT add any contact info that is not in the CANDIDATE CONTACT INFO section
 
 ## LaTeX Template (USE THIS EXACT STRUCTURE)
 
@@ -79,10 +85,8 @@ Generate a compelling cover letter that:
 \hfill
 \begin{tabular}{l @{}}
   \today \bigskip\\
-  % Candidate name from resume
-  % Candidate address from resume
-  % Phone: candidate phone from resume
-  % Email: candidate email from resume
+  % Name from CANDIDATE CONTACT INFO
+  % Email from CANDIDATE CONTACT INFO (if provided)
 \end{tabular}
 
 \bigskip
@@ -117,15 +121,18 @@ Sincerely yours,
 \end{document}
 
 ## Important Rules
+- Use ONLY the contact info from the CANDIDATE CONTACT INFO section - do NOT extract it from the resume
 - Never fabricate experiences or skills not present in the resume
+- Do NOT include LinkedIn, GitHub, personal website, portfolio, or any other links/URLs
 - Never include placeholder text like [INSERT X HERE] or template comments—use actual content
-- Replace ALL comments in the template with real content from the inputs
 - Keep the tone professional and authentic, not generic or templated
 - Ensure the LaTeX compiles without errors using pdflatex
 
 ## CRITICAL: Handling Missing Information
 - NEVER output bracketed text like "[I am unable to...]" or "[Company mission not provided]" or any similar explanations
-- NEVER explain what information is missing—just write around it
+- NEVER write "N/A", "Not Available", "None", or any placeholder for missing info
+- If information is missing, COMPLETELY OMIT that line - do not include it at all
+- If email is missing: do not include any email line  
 - If company mission/values are unknown: Focus on the role itself, the technical challenges, or general industry enthusiasm
 - If specific company details are unavailable: Write about the position, team, or opportunity instead
 - If hiring manager name is unknown: Use "Hiring Manager" without any bracketed notes

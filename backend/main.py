@@ -28,21 +28,85 @@ COVER_LETTER_SYSTEM_PROMPT = PROMPT_PATH.read_text() if PROMPT_PATH.exists() els
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 
+class JobInfoError(Exception):
+    """Raised when company or role cannot be detected from job description."""
+    pass
+
+
+def extract_contact_info(resume_text: str) -> dict:
+    """
+    Extract name, email, and phone from resume using regex.
+    
+    Args:
+        resume_text: The resume text content.
+        
+    Returns:
+        Dictionary with name, email, and phone.
+    """
+    import re
+    
+    # Extract email using regex
+    email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+    email_matches = re.findall(email_pattern, resume_text)
+    
+    # Filter out emails that look like URLs or are LinkedIn/GitHub
+    email = None
+    for match in email_matches:
+        if 'linkedin' not in match.lower() and 'github' not in match.lower():
+            email = match
+            break
+    
+    # Extract phone using regex
+    phone_patterns = [
+        r'\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}',  # (123) 456-7890, 123-456-7890, +1 123 456 7890
+        r'\d{3}[-.\s]\d{3}[-.\s]\d{4}',  # 123-456-7890
+        r'\(\d{3}\)\s*\d{3}[-.\s]?\d{4}',  # (123) 456-7890
+    ]
+    phone = None
+    for pattern in phone_patterns:
+        phone_matches = re.findall(pattern, resume_text)
+        if phone_matches:
+            phone = phone_matches[0].strip()
+            break
+    
+    # Extract name - assume it's the first line or first capitalized words
+    lines = resume_text.strip().split('\n')
+    name = "Candidate"
+    for line in lines[:5]:  # Check first 5 lines
+        line = line.strip()
+        # Skip empty lines and lines that look like contact info
+        if not line or '@' in line or 'http' in line.lower() or line.isdigit():
+            continue
+        # Take first non-empty line that looks like a name
+        if len(line) < 50 and not any(c.isdigit() for c in line):
+            name = line
+            break
+    
+    # Capitalize name properly (First Letter Of Each Word)
+    name = ' '.join(word.capitalize() for word in name.split())
+    
+    return {"name": name, "email": email, "phone": phone}
+
+
 def get_company_info(job_description: str) -> dict:
     """
-    Call Gemini API to extract company name and research what the company does.
+    Call Gemini API to extract company name, role, and research what the company does.
     
     Args:
         job_description: The job posting description containing company name.
         
     Returns:
-        Dictionary with company name and description.
+        Dictionary with company name, role, and description.
+        
+    Raises:
+        JobInfoError: If company or role cannot be detected.
     """
-    system_prompt = """You are a company research assistant with knowledge of real companies. Given a job description, identify the company and provide SPECIFIC, FACTUAL information about them.
+    system_prompt = """You are a company research assistant with knowledge of real companies. Given a job description, identify the company, the job role, and provide SPECIFIC, FACTUAL information about the company.
 
 Your task:
 1. Identify the company name from the job description
-2. Using your knowledge of this company, provide CONCRETE details about:
+2. Identify the job role/title from the job description
+3. Using your knowledge of this company, provide CONCRETE details about:
    - What specific products or services they offer (name actual products if possible)
    - What industry they operate in (e.g., fintech, e-commerce, SaaS, etc.)
    - Who their customers are (consumers, businesses, etc.)
@@ -50,17 +114,23 @@ Your task:
 
 Respond in this exact JSON format (no markdown, no code fences):
 {
-    "company_name": "Company Name Here",
+    "company_name": "Company Name Here or null if not found",
+    "role": "Job Title Here or null if not found",
     "description": "Specific description with actual products, services, and industry details..."
 }
 
 IMPORTANT: 
+- If the company name is NOT EXPLICITLY WRITTEN in the job description text, you MUST set company_name to null
+- If the job role/title is NOT EXPLICITLY WRITTEN in the job description text, you MUST set role to null
+- Do NOT infer, guess, or assume a company name based on context, writing style, or job type
+- Do NOT hallucinate or make up company names - ONLY extract what is explicitly stated
+- The company name must appear as actual text in the job description, not be guessed from context
 - Do NOT give vague descriptions like "a technology company" or "offers software solutions"
 - Give SPECIFIC details like "Super.com is a fintech app that helps users save money through discounted hotel bookings, buy-now-pay-later services, and a cashback savings account"
 - If you know the company, use your real knowledge about them
 - Be factual and specific about their actual business model and offerings"""
 
-    user_message = f"""Identify the company in this job description and tell me specifically what they do (their actual products, services, industry, and customers):
+    user_message = f"""Identify the company and job role in this job description, and tell me specifically what the company does (their actual products, services, industry, and customers):
 
 {job_description}"""
 
@@ -88,11 +158,27 @@ IMPORTANT:
     try:
         company_info = json.loads(response_text)
     except json.JSONDecodeError:
-        # Fallback if JSON parsing fails
-        company_info = {
-            "company_name": "the company",
-            "description": ""
-        }
+        raise JobInfoError("Failed to parse job information")
+    
+    # Validate company name
+    company_name = company_info.get("company_name")
+    invalid_company_names = [
+        "null", "none", "unknown", "not found", "not specified", 
+        "n/a", "na", "the company", "company", "company name",
+        "company name here", "[company]", "[company name]"
+    ]
+    if not company_name or company_name.lower().strip() in invalid_company_names:
+        raise JobInfoError("Could not detect company name from the job description. Please include the company name.")
+    
+    # Validate role
+    role = company_info.get("role")
+    invalid_role_names = [
+        "null", "none", "unknown", "not found", "not specified",
+        "n/a", "na", "the role", "role", "job title",
+        "job title here", "[role]", "[job title]"
+    ]
+    if not role or role.lower().strip() in invalid_role_names:
+        raise JobInfoError("Could not detect job role/title from the job description. Please include the job title.")
     
     return company_info
 
@@ -145,7 +231,7 @@ def generate_cover_letter_latex(resume_text: str, job_description: str) -> str:
     """
     Call Gemini API to generate LaTeX cover letter code.
     
-    First fetches company description via Gemini, then generates the cover letter.
+    First extracts contact info and company description, then generates the cover letter.
     
     Args:
         resume_text: The candidate's resume as plain text.
@@ -154,14 +240,35 @@ def generate_cover_letter_latex(resume_text: str, job_description: str) -> str:
     Returns:
         LaTeX source code for the cover letter.
     """
+    # Extract contact info from resume using regex (no AI)
+    print("📋 Extracting contact info...")
+    contact_info = extract_contact_info(resume_text)
+    print(f"   Name: {contact_info.get('name', 'Unknown')}")
+    print(f"   Email: {contact_info.get('email', 'Not found')}")
+    print(f"   Phone: {contact_info.get('phone', 'Not found')}")
+    
     # First call: Get company description
     print("🔍 Researching company description...")
     company_info = get_company_info(job_description)
     print(f"   Company: {company_info.get('company_name', 'Unknown')}")
     print(f"   Description: {company_info.get('description', 'N/A')[:100]}...")
     
+    # Build contact info section - name, email, and phone if available
+    contact_lines = [f"Name: {contact_info.get('name', 'Candidate')}"]
+    if contact_info.get('email'):
+        contact_lines.append(f"Email: {contact_info['email']}")
+    if contact_info.get('phone'):
+        contact_lines.append(f"Phone: {contact_info['phone']}")
+    contact_section = "\n".join(contact_lines)
+    
     # Build company context section
-    company_context = f"""=== COMPANY RESEARCH (use this to personalize the cover letter) ===
+    company_context = f"""=== CANDIDATE CONTACT INFO (use ONLY this for contact details) ===
+{contact_section}
+
+NOTE: Use ONLY the contact info listed above. Do NOT add any other contact info, links, or URLs.
+=== END OF CONTACT INFO ===
+
+=== COMPANY RESEARCH (use this to personalize the cover letter) ===
 Company Name: {company_info.get('company_name', 'Unknown')}
 
 Company Description: {company_info.get('description', 'Not available')}
@@ -170,8 +277,8 @@ Company Description: {company_info.get('description', 'Not available')}
 
 """
     
-    # Second call: Generate the cover letter with company context
-    user_message = f"""{company_context}=== CANDIDATE'S RESUME (use this for the candidate's background) ===
+    # Third call: Generate the cover letter with company context
+    user_message = f"""{company_context}=== CANDIDATE'S RESUME (use this for work experience and skills ONLY, not contact info) ===
 {resume_text}
 
 === END OF RESUME ===
@@ -181,7 +288,8 @@ Company Description: {company_info.get('description', 'Not available')}
 
 === END OF JOB DESCRIPTION ===
 
-Generate a cover letter for the CANDIDATE applying to the JOB above. Use the company description to demonstrate knowledge of the company."""
+Generate a cover letter for the CANDIDATE applying to the JOB above. 
+IMPORTANT: For contact info, use ONLY what is provided in the CANDIDATE CONTACT INFO section above. Do NOT extract contact info from the resume."""
 
     response = client.models.generate_content(
         model="gemini-2.0-flash",

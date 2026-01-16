@@ -19,6 +19,7 @@ from main import (
     generate_cover_letter_latex,
     format_job_for_prompt,
     COVER_LETTER_SYSTEM_PROMPT,
+    JobInfoError,
 )
 from scraper import scrape_job_posting
 
@@ -163,6 +164,9 @@ async def generate_cover_letter(
         print("✅ Cover letter generated successfully")
         return GenerateResponse(pdf=pdf_base64)
         
+    except JobInfoError as e:
+        print(f"❌ Job info error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         print(f"❌ Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
