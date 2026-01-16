@@ -49,6 +49,7 @@ export default function Home() {
     setIsGenerating(true);
     setError(null);
     setPdfUrl(null);
+    setShowPdf(false);
 
     try {
       const formData = new FormData();
