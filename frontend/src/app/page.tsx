@@ -5,7 +5,6 @@ import { Download } from "lucide-react";
 
 type InputMode = "url" | "text";
 
-const API_URL = "http://localhost:8000";
 
 export default function Home() {
   const [inputMode, setInputMode] = useState<InputMode>("url");
@@ -65,7 +64,7 @@ export default function Home() {
         formData.append("job_description", jobDescription);
       }
 
-      const response = await fetch(`${API_URL}/generate`, {
+      const response = await fetch("/api/generate", {
         method: "POST",
         body: formData,
       });
