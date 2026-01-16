@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Download } from "lucide-react";
 
 type InputMode = "url" | "text";
 
@@ -14,6 +15,7 @@ export default function Home() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [showPdf, setShowPdf] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleResumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,13 +187,24 @@ export default function Home() {
           onChange={handleLogoChange}
           className="hidden"
         />
-        <button
-          type="button"
-          onClick={() => document.getElementById("logo-upload")?.click()}
-          className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
-        >
-          {logoFile ? logoFile.name : "Upload Logo"}
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => document.getElementById("logo-upload")?.click()}
+            className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            {logoFile ? logoFile.name : "Upload Logo"}
+          </button>
+          {logoFile && (
+            <button
+              type="button"
+              onClick={() => setLogoFile(null)}
+              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              Reset to UWaterloo
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Generate Button */}
@@ -213,20 +226,28 @@ export default function Home() {
       {/* PDF Result */}
       {pdfUrl && (
         <div className="mt-6">
-          <div className="flex justify-between items-center mb-2">
-            <span className="font-medium">Your Cover Letter</span>
+          <div className="flex gap-2">
             <button
-              onClick={handleDownload}
+              onClick={() => setShowPdf(!showPdf)}
               className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
             >
+              {showPdf ? "Hide Cover Letter" : "View Cover Letter"}
+            </button>
+            <button
+              onClick={handleDownload}
+              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
               Download PDF
             </button>
           </div>
-          <iframe
-            src={pdfUrl}
-            className="w-full h-[600px] border rounded-xl"
-            title="Cover Letter PDF"
-          />
+          {showPdf && (
+            <iframe
+              src={pdfUrl}
+              className="w-full h-[600px] border rounded-xl mt-4"
+              title="Cover Letter PDF"
+            />
+          )}
         </div>
       )}
     </div>
