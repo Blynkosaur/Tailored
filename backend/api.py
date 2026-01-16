@@ -102,8 +102,8 @@ def compile_latex_with_logo(
             with open(logo_path, "wb") as f:
                 f.write(logo_bytes)
         else:
-            # Use default UWaterloo logo if exists
-            default_logo = Path(__file__).parent.parent / "resume" / "school.png"
+            # Use default UWaterloo logo if exists (in backend folder)
+            default_logo = Path(__file__).parent / "school.png"
             if default_logo.exists():
                 shutil.copy(default_logo, os.path.join(tmp_dir, "school.png"))
 
