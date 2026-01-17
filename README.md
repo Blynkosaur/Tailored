@@ -4,44 +4,99 @@ Generate personalized cover letters from your resume and job postings using AI.
 
 ## Features
 
-- 📄 Parses PDF resumes automatically
-- 🔍 Scrapes job postings from any URL (LinkedIn, Greenhouse, Lever, etc.)
-- 🤖 Uses Google Gemini AI to generate tailored cover letters
-- 📝 Outputs professional LaTeX-formatted PDFs
+- Parses PDF resumes automatically
+- Scrapes job postings from any URL (LinkedIn, Greenhouse, Lever, etc.)
+- Uses Google Gemini AI to generate tailored cover letters
+- Outputs professional LaTeX-formatted PDFs
 
-## Prerequisites
+## How It Works
 
+1. **Job Scraping**: When a user provides a job URL, Playwright (a headless browser) navigates to the page and waits for JavaScript to render. This allows scraping of dynamic job boards like LinkedIn, Greenhouse, and Lever that load content client-side.
+
+2. **Resume Parsing**: The uploaded PDF resume is parsed to extract text content.
+
+3. **AI Generation**: The resume text and job description are sent to Google Gemini, which generates a tailored cover letter in LaTeX format based on a custom prompt template.
+
+4. **PDF Compilation**: The LaTeX output is compiled to PDF using pdflatex, producing a professionally formatted cover letter ready for download.
+
+## Architecture
+
+This project consists of two main components:
+
+### Frontend (Next.js)
+
+A modern React-based web application built with Next.js. Handles the user interface for uploading resumes, entering job URLs or descriptions, and downloading generated cover letters.
+
+- Located in `frontend/`
+- Built with Next.js 14+ and TypeScript
+- Uses Tailwind CSS for styling
+- API routes proxy requests to the backend
+
+### Backend (Python/FastAPI)
+
+A Python API that handles resume parsing, job scraping, AI generation, and PDF compilation.
+
+- Located in `backend/`
+- Built with FastAPI
+- Uses Playwright for web scraping
+- Uses Google Gemini for AI generation
+- Compiles LaTeX to PDF using pdflatex
+
+## Deployment
+
+The backend is containerized with Docker and deployed on AWS:
+
+- **Docker**: The backend includes a `Dockerfile` for containerization
+- **AWS ECS**: Container orchestration using Elastic Container Service
+- **AWS Fargate**: Serverless compute for running containers without managing servers
+
+## Project Structure
+
+```
+tailored/
+├── frontend/                 # Next.js frontend application
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── api/         # API route handlers (proxy to backend)
+│   │   │   ├── page.tsx     # Main application page
+│   │   │   └── layout.tsx   # Root layout
+│   │   ├── components/      # Reusable UI components
+│   │   └── lib/             # Utilities and constants
+│   ├── package.json
+│   └── next.config.ts
+│
+├── backend/                  # Python FastAPI backend
+│   ├── api.py               # FastAPI endpoints
+│   ├── main.py              # Cover letter generation logic
+│   ├── resume_parser.py     # PDF resume text extraction
+│   ├── scraper.py           # Job posting web scraper
+│   ├── prompt.txt           # System prompt for AI
+│   ├── Dockerfile           # Container configuration
+│   └── requirements.txt     # Python dependencies
+│
+└── README.md
+```
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 18+
 - Python 3.10+
 - pdflatex (for compiling LaTeX to PDF)
 - Google Gemini API key
 
-### Install pdflatex (macOS)
-
-```bash
-brew install --cask basictex
-eval "$(/usr/libexec/path_helper)"
-```
-
-## Setup
-
-1. **Create and activate virtual environment:**
+### Backend Setup
 
 ```bash
 cd backend
 python3 -m venv venv
 source venv/bin/activate
-```
-
-2. **Install dependencies:**
-
-```bash
 pip install -r requirements.txt
 playwright install chromium
 ```
 
-3. **Set up your API key:**
-
-Create a `.env` file in the project root:
+Create a `.env` file in the backend directory:
 
 ```
 GEMINI_API_KEY=your-api-key-here
@@ -49,87 +104,36 @@ GEMINI_API_KEY=your-api-key-here
 
 Get your API key from [Google AI Studio](https://aistudio.google.com/apikey).
 
-4. **Add your resume:**
-
-Place your resume PDF in the `resume/` folder.
-
-## Usage
-
-### Generate a cover letter from a job URL
+Run the backend:
 
 ```bash
-source venv/bin/activate
-python main.py "https://boards.greenhouse.io/company/jobs/123456"
+uvicorn api:app --reload --port 8000
 ```
 
-Or run interactively:
+### Frontend Setup
 
 ```bash
-python main.py
-# Then paste the job URL when prompted
+cd frontend
+npm install
+npm run dev
 ```
 
-The cover letter will be saved to `resume/cover_letter.pdf`.
+The frontend runs on `http://localhost:3000` and proxies API requests to the backend.
 
-### Use as a module
+## Environment Variables
 
-```python
-from main import generate_cover_letter, generate_cover_letter_from_text
+### Backend
 
-# From a job URL (scrapes the page)
-generate_cover_letter(
-    resume_path="../resume/YourResume.pdf",
-    job_url="https://example.com/jobs/123",
-    output_filename="cover_letter.pdf"
-)
-
-# From plain text job description
-generate_cover_letter_from_text(
-    resume_path="../resume/YourResume.pdf",
-    job_description="Software Engineer at Acme Corp...",
-    output_filename="cover_letter.pdf"
-)
-```
-
-## Project Structure
-
-```
-backend/
-├── main.py           # Main entry point and cover letter generation
-├── resume_parser.py  # PDF resume text extraction
-├── scraper.py        # Job posting web scraper
-├── prompt.txt        # System prompt for the AI
-├── requirements.txt  # Python dependencies
-└── README.md         # This file
-
-resume/
-├── YourResume.pdf    # Your resume (add your own)
-├── school.png        # Logo for cover letter header
-└── cover_letter.pdf  # Generated output
-```
-
-## Customization
-
-### Change the cover letter template
-
-Edit `prompt.txt` to modify the LaTeX template or adjust the AI instructions.
-
-### Add your school/company logo
-
-Replace `resume/school.png` with your own logo (keep the filename).
+| Variable | Description |
+|----------|-------------|
+| `GEMINI_API_KEY` | Google Gemini API key for AI generation |
 
 ## Troubleshooting
 
-### "No module named 'google'"
-
-Make sure you're in the virtual environment:
-```bash
-source venv/bin/activate
-```
-
 ### "pdflatex not found"
 
-Install BasicTeX and restart your terminal:
+Install BasicTeX (macOS):
+
 ```bash
 brew install --cask basictex
 eval "$(/usr/libexec/path_helper)"
@@ -137,7 +141,6 @@ eval "$(/usr/libexec/path_helper)"
 
 ### Blank PDF / missing fonts
 
-The template uses standard fonts. If you see issues, try:
 ```bash
 sudo tlmgr update --self
 sudo tlmgr install lmodern
@@ -145,4 +148,4 @@ sudo tlmgr install lmodern
 
 ### Job page not parsing correctly
 
-Some pages load slowly. The scraper waits 3 seconds for JavaScript to render. If content is still missing, the raw page text is passed to the AI as a fallback.
+Some pages load slowly. The scraper waits for JavaScript to render. If content is still missing, the raw page text is passed to the AI as a fallback.

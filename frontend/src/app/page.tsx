@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Github, Star } from "lucide-react";
 
 type InputMode = "url" | "text";
 
@@ -111,7 +111,7 @@ export default function Home() {
     resumeFile && (inputMode === "url" ? jobUrl : jobDescription);
 
   return (
-    <div className="max-w-xl mx-auto p-8">
+    <div className="max-w-xl mx-auto p-8 min-h-screen flex flex-col">
       <h1 className="text-4xl font-bold mb-6 font-[family-name:var(--font-shizuru)]">
         Tailored
       </h1>
@@ -122,16 +122,16 @@ export default function Home() {
         <div className="flex gap-2 mb-2">
           <button
             onClick={() => setInputMode("url")}
-            className={`px-3 py-1 border rounded-full transition-colors cursor-pointer flex items-center justify-center shadow-sm ${
-              inputMode === "url" ? "bg-black text-white" : "hover:bg-gray-100"
+            className={`px-3 py-1 border rounded-full transition-all cursor-pointer shadow-sm ${
+              inputMode === "url" ? "bg-black text-white" : "hover:bg-gray-100 hover:font-bold"
             }`}
           >
             URL
           </button>
           <button
             onClick={() => setInputMode("text")}
-            className={`px-3 py-1 border rounded-full transition-colors cursor-pointer shadow-sm ${
-              inputMode === "text" ? "bg-black text-white" : "hover:bg-gray-100"
+            className={`px-3 py-1 border rounded-full transition-all cursor-pointer shadow-sm ${
+              inputMode === "text" ? "bg-black text-white" : "hover:bg-gray-100 hover:font-bold"
             }`}
           >
             Paste Text
@@ -169,7 +169,7 @@ export default function Home() {
         <button
           type="button"
           onClick={() => document.getElementById("resume-upload")?.click()}
-          className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer shadow-sm"
+          className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm"
         >
           {resumeFile ? resumeFile.name : "Upload Resume"}
         </button>
@@ -191,7 +191,7 @@ export default function Home() {
           <button
             type="button"
             onClick={() => document.getElementById("logo-upload")?.click()}
-            className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer shadow-sm"
+            className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm"
           >
             {logoFile ? logoFile.name : "Upload Logo"}
           </button>
@@ -199,7 +199,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setLogoFile(null)}
-              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer shadow-sm"
+              className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm"
             >
               Reset to UWaterloo
             </button>
@@ -211,7 +211,7 @@ export default function Home() {
       <button
         onClick={handleGenerate}
         disabled={!isFormValid || isGenerating}
-        className="w-full p-3 bg-black text-white rounded-full hover:bg-gray-700 transition-colors cursor-pointer shadow-sm disabled:bg-gray-300 disabled:text-gray-500 disabled:hover:bg-gray-300 disabled:cursor-not-allowed"
+        className="w-full p-3 bg-black text-white rounded-full hover:bg-gray-700 hover:font-bold transition-all cursor-pointer shadow-sm disabled:bg-gray-300 disabled:text-gray-500 disabled:hover:bg-gray-300 disabled:cursor-not-allowed"
       >
         {isGenerating ? "Generating..." : "Generate Cover Letter"}
       </button>
@@ -229,13 +229,13 @@ export default function Home() {
           <div className="flex gap-2">
             <button
               onClick={() => setShowPdf(!showPdf)}
-              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer shadow-sm"
+              className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm"
             >
               {showPdf ? "Hide Cover Letter" : "View Cover Letter"}
             </button>
             <button
               onClick={handleDownload}
-              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer shadow-sm flex items-center gap-2"
+              className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
               Download PDF
@@ -250,6 +250,19 @@ export default function Home() {
           )}
         </div>
       )}
+
+      {/* GitHub Link */}
+      <div className="mt-10 flex justify-start">
+        <a
+          href="https://github.com/Blynkosaur/Tailored"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 text-gray-500 hover:text-gray-700 hover:font-bold transition-all font-medium"
+        >
+          <Github className="w-5 h-5" />
+          <span>(star it <Star className="w-4 h-4 inline" />)</span>
+        </a>
+      </div>
     </div>
   );
 }
