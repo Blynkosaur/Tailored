@@ -122,7 +122,7 @@ export default function Home() {
         <div className="flex gap-2 mb-2">
           <button
             onClick={() => setInputMode("url")}
-            className={`px-3 py-1 border rounded-full transition-colors cursor-pointer ${
+            className={`px-3 py-1 border rounded-full transition-colors cursor-pointer flex items-center justify-center shadow-sm ${
               inputMode === "url" ? "bg-black text-white" : "hover:bg-gray-100"
             }`}
           >
@@ -130,7 +130,7 @@ export default function Home() {
           </button>
           <button
             onClick={() => setInputMode("text")}
-            className={`px-3 py-1 border rounded-full transition-colors cursor-pointer ${
+            className={`px-3 py-1 border rounded-full transition-colors cursor-pointer shadow-sm ${
               inputMode === "text" ? "bg-black text-white" : "hover:bg-gray-100"
             }`}
           >
@@ -144,14 +144,14 @@ export default function Home() {
             placeholder="https://jobs.example.com/..."
             value={jobUrl}
             onChange={(e) => setJobUrl(e.target.value)}
-            className="w-full p-2 border rounded-xl"
+            className="w-full p-2 border rounded-xl shadow-sm"
           />
         ) : (
           <textarea
             placeholder="Paste job description here..."
             value={jobDescription}
             onChange={(e) => setJobDescription(e.target.value)}
-            className="w-full p-2 border rounded-xl h-40"
+            className="w-full p-2 border rounded-xl h-40 shadow-sm"
           />
         )}
       </div>
@@ -169,7 +169,7 @@ export default function Home() {
         <button
           type="button"
           onClick={() => document.getElementById("resume-upload")?.click()}
-          className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer shadow-sm"
         >
           {resumeFile ? resumeFile.name : "Upload Resume"}
         </button>
@@ -191,7 +191,7 @@ export default function Home() {
           <button
             type="button"
             onClick={() => document.getElementById("logo-upload")?.click()}
-            className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer shadow-sm"
           >
             {logoFile ? logoFile.name : "Upload Logo"}
           </button>
@@ -199,7 +199,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setLogoFile(null)}
-              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer shadow-sm"
             >
               Reset to UWaterloo
             </button>
@@ -211,7 +211,7 @@ export default function Home() {
       <button
         onClick={handleGenerate}
         disabled={!isFormValid || isGenerating}
-        className="w-full p-3 bg-black text-white rounded-full hover:bg-gray-700 transition-colors cursor-pointer disabled:bg-gray-300 disabled:text-gray-500 disabled:hover:bg-gray-300 disabled:cursor-not-allowed"
+        className="w-full p-3 bg-black text-white rounded-full hover:bg-gray-700 transition-colors cursor-pointer shadow-sm disabled:bg-gray-300 disabled:text-gray-500 disabled:hover:bg-gray-300 disabled:cursor-not-allowed"
       >
         {isGenerating ? "Generating..." : "Generate Cover Letter"}
       </button>
@@ -229,13 +229,13 @@ export default function Home() {
           <div className="flex gap-2">
             <button
               onClick={() => setShowPdf(!showPdf)}
-              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer shadow-sm"
             >
               {showPdf ? "Hide Cover Letter" : "View Cover Letter"}
             </button>
             <button
               onClick={handleDownload}
-              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer flex items-center gap-2"
+              className="px-4 py-2 border rounded-full hover:bg-gray-100 transition-colors cursor-pointer shadow-sm flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
               Download PDF
