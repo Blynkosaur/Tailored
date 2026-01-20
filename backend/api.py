@@ -133,22 +133,25 @@ async def generate_cover_letter(
     logo: UploadFile | None = File(None, description="School logo image (optional)"),
     job_url: str | None = Form(None, description="Job posting URL"),
     job_description: str | None = Form(None, description="Job description text"),
+    job_pdf: UploadFile | None = File(None, description="Job description PDF file"),
     _: HTTPAuthorizationCredentials = Depends(verify_token),
 ):
     """
     Generate a cover letter from a resume and job posting.
 
-    Provide either job_url OR job_description (not both).
+    Provide either job_url, job_description, or job_pdf (only one).
     """
-    # Validate input
-    if not job_url and not job_description:
+    # Validate input - count how many job inputs are provided
+    job_inputs = sum([bool(job_url), bool(job_description), job_pdf is not None])
+    
+    if job_inputs == 0:
         raise HTTPException(
-            status_code=400, detail="Provide either job_url or job_description"
+            status_code=400, detail="Provide job_url, job_description, or job_pdf"
         )
 
-    if job_url and job_description:
+    if job_inputs > 1:
         raise HTTPException(
-            status_code=400, detail="Provide only one of job_url or job_description"
+            status_code=400, detail="Provide only one of job_url, job_description, or job_pdf"
         )
 
     # Validate resume file
@@ -170,6 +173,10 @@ async def generate_cover_letter(
             loop = asyncio.get_event_loop()
             job_data = await loop.run_in_executor(executor, scrape_job_posting, job_url)
             job_desc = format_job_for_prompt(job_data)
+        elif job_pdf:
+            print("📄 Parsing job description PDF...")
+            job_pdf_bytes = await job_pdf.read()
+            job_desc = parse_resume_from_bytes(job_pdf_bytes)
         else:
             job_desc = job_description
 
