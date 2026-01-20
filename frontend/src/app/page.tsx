@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { Download, Github, Star } from "lucide-react";
 
-type InputMode = "url" | "text";
+type InputMode = "url" | "text" | "pdf";
 
 
 export default function Home() {
   const [inputMode, setInputMode] = useState<InputMode>("url");
   const [jobUrl, setJobUrl] = useState("");
   const [jobDescription, setJobDescription] = useState("");
+  const [jobPdfFile, setJobPdfFile] = useState<File | null>(null);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -31,6 +32,13 @@ export default function Home() {
     }
   };
 
+  const handleJobPdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === "application/pdf") {
+      setJobPdfFile(file);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!resumeFile) {
       alert("Please upload your resume");
@@ -42,6 +50,10 @@ export default function Home() {
     }
     if (inputMode === "text" && !jobDescription) {
       alert("Please enter a job description");
+      return;
+    }
+    if (inputMode === "pdf" && !jobPdfFile) {
+      alert("Please upload a job description PDF");
       return;
     }
 
@@ -60,8 +72,10 @@ export default function Home() {
       
       if (inputMode === "url") {
         formData.append("job_url", jobUrl);
-      } else {
+      } else if (inputMode === "text") {
         formData.append("job_description", jobDescription);
+      } else if (inputMode === "pdf" && jobPdfFile) {
+        formData.append("job_pdf", jobPdfFile);
       }
 
       const response = await fetch("/api/generate", {
@@ -108,7 +122,8 @@ export default function Home() {
   };
 
   const isFormValid =
-    resumeFile && (inputMode === "url" ? jobUrl : jobDescription);
+    resumeFile &&
+    (inputMode === "url" ? jobUrl : inputMode === "text" ? jobDescription : jobPdfFile);
 
   return (
     <div className="max-w-xl mx-auto p-8 min-h-screen flex flex-col">
@@ -136,9 +151,17 @@ export default function Home() {
           >
             Paste Text
           </button>
+          <button
+            onClick={() => setInputMode("pdf")}
+            className={`px-3 py-1 border rounded-full transition-all cursor-pointer shadow-sm ${
+              inputMode === "pdf" ? "bg-black text-white" : "hover:bg-gray-100 hover:font-bold"
+            }`}
+          >
+            Upload PDF
+          </button>
         </div>
 
-        {inputMode === "url" ? (
+        {inputMode === "url" && (
           <input
             type="url"
             placeholder="https://jobs.example.com/..."
@@ -146,13 +169,32 @@ export default function Home() {
             onChange={(e) => setJobUrl(e.target.value)}
             className="w-full p-2 border rounded-xl shadow-sm"
           />
-        ) : (
+        )}
+        {inputMode === "text" && (
           <textarea
             placeholder="Paste job description here..."
             value={jobDescription}
             onChange={(e) => setJobDescription(e.target.value)}
             className="w-full p-2 border rounded-xl h-40 shadow-sm"
           />
+        )}
+        {inputMode === "pdf" && (
+          <>
+            <input
+              id="job-pdf-upload"
+              type="file"
+              accept=".pdf"
+              onChange={handleJobPdfChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => document.getElementById("job-pdf-upload")?.click()}
+              className="w-full p-2 border rounded-xl hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm text-left"
+            >
+              {jobPdfFile ? jobPdfFile.name : "Upload Job Description PDF"}
+            </button>
+          </>
         )}
       </div>
 
