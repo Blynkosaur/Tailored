@@ -1,0 +1,87 @@
+\documentclass{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\color{black}
+
+\usepackage[
+  a4paper,
+  top=0.75in,
+  bottom=0.75in,
+  left=1in,
+  right=1in,
+]{geometry}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.8em}
+
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+
+\fancypagestyle{firstpage}{%
+  \fancyhf{}
+  \renewcommand{\headrulewidth}{0pt}
+  \renewcommand{\footrulewidth}{1pt}
+}
+
+\fancypagestyle{subsequentpages}{%
+  \fancyhf{}
+  \renewcommand{\headrulewidth}{1pt}
+  \renewcommand{\footrulewidth}{1pt}
+}
+
+\AtBeginDocument{\thispagestyle{firstpage}}
+\pagestyle{subsequentpages}
+
+\begin{document}
+
+\includegraphics[width=0.4\textwidth]{school.png}
+
+\vspace{-1em}
+
+\rule{\linewidth}{1pt}
+
+\bigskip
+
+\hfill
+\begin{tabular}{l @{}}
+  \today \bigskip\\
+  {{sender_block}}
+\end{tabular}
+
+\bigskip
+
+\begin{tabular}{@{} l}
+  {{addressee_tex}}
+\end{tabular}
+
+\bigskip
+
+{{greeting}}
+
+\bigskip
+
+{{intro}}
+
+\bigskip
+
+{{body_1}}
+
+\bigskip
+
+{{body_2}}
+
+\bigskip
+
+{{closing}}
+
+\bigskip
+
+Sincerely yours,
+
+\vspace{24pt}
+
+{{signature}}
+
+\end{document}

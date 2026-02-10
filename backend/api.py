@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from main import (
     get_company_info,
     generate_cover_letter_latex,
+    generate_cover_letter_sections,
     format_job_for_prompt,
     COVER_LETTER_SYSTEM_PROMPT,
     JobInfoError,
@@ -63,7 +64,53 @@ app.add_middleware(
 
 class GenerateResponse(BaseModel):
     pdf: str  # base64 encoded PDF
+    sections: dict  # tokenized sections for editable HTML view (sender_name, addressee, greeting, intro, body_1, body_2, closing, signature)
     company_name: str | None = None
+
+
+class CompileResponse(BaseModel):
+    pdf: str  # base64 encoded PDF
+
+
+# Template-to-token: load once
+_TEMPLATE_PATH = Path(__file__).parent / "cover_letter_template.tex"
+_COVER_LETTER_TEMPLATE = _TEMPLATE_PATH.read_text(encoding="utf-8") if _TEMPLATE_PATH.exists() else ""
+
+
+def _escape_latex(s: str) -> str:
+    if not s:
+        return ""
+    s = s.replace("\\", "\\textbackslash ")
+    for char, repl in [("&", "\\&"), ("%", "\\%"), ("#", "\\#"), ("$", "\\$"), ("_", "\\_"), ("{", "\\{"), ("}", "\\}")]:
+        s = s.replace(char, repl)
+    return s
+
+
+def build_tex_from_sections(sections: dict) -> str:
+    """Inject section tokens into the cover letter template. Sections dict has sender_name, sender_email, addressee, greeting, intro, body_1, body_2, closing, signature."""
+    sender_name = _escape_latex(sections.get("sender_name") or "")
+    sender_email = _escape_latex(sections.get("sender_email") or "")
+    sender_block = sender_name
+    if sender_email:
+        sender_block = sender_name + " \\\\\n  " + sender_email
+
+    addressee = sections.get("addressee") or ""
+    addressee_tex = " \\\\\n  ".join(_escape_latex(line) for line in addressee.split("\n") if line.strip())
+
+    replacements = {
+        "sender_block": sender_block,
+        "addressee_tex": addressee_tex or " ",
+        "greeting": _escape_latex(sections.get("greeting") or ""),
+        "intro": _escape_latex(sections.get("intro") or ""),
+        "body_1": _escape_latex(sections.get("body_1") or ""),
+        "body_2": _escape_latex(sections.get("body_2") or ""),
+        "closing": _escape_latex(sections.get("closing") or ""),
+        "signature": _escape_latex(sections.get("signature") or ""),
+    }
+    tex = _COVER_LETTER_TEMPLATE
+    for key, value in replacements.items():
+        tex = tex.replace("{{" + key + "}}", value)
+    return tex
 
 
 def parse_resume_from_bytes(pdf_bytes: bytes) -> str:
@@ -180,30 +227,54 @@ async def generate_cover_letter(
         else:
             job_desc = job_description
 
-        # Generate LaTeX (run in thread pool since it makes sync API calls)
-        print("🤖 Generating cover letter...")
+        # Generate sections (JSON) for template-to-token + editable HTML view
+        print("🤖 Generating cover letter sections...")
         loop = asyncio.get_event_loop()
-        latex_content = await loop.run_in_executor(
-            executor, generate_cover_letter_latex, resume_text, job_desc
+        sections = await loop.run_in_executor(
+            executor, generate_cover_letter_sections, resume_text, job_desc
         )
 
-        # Compile to PDF
-        print("📝 Compiling LaTeX to PDF...")
+        # Build .tex from template + sections, then compile
+        print("📝 Building LaTeX and compiling to PDF...")
+        latex_content = build_tex_from_sections(sections)
         pdf_bytes = await loop.run_in_executor(
             executor, compile_latex_with_logo, latex_content, logo_bytes
         )
 
-        # Encode as base64
         pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
-
         print("✅ Cover letter generated successfully")
-        return GenerateResponse(pdf=pdf_base64)
+        return GenerateResponse(pdf=pdf_base64, sections=sections)
 
     except JobInfoError as e:
         print(f"❌ Job info error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         print(f"❌ Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/compile", response_model=CompileResponse)
+async def compile_sections(
+    sections: str = Form(..., description="JSON string of section tokens"),
+    logo: UploadFile | None = File(None, description="School logo image (optional)"),
+    _: HTTPAuthorizationCredentials = Depends(verify_token),
+):
+    """
+    Inject section tokens into template and compile to PDF (no AI). Use after editing the letter in the HTML view.
+    """
+    try:
+        import json as _json
+        section_dict = _json.loads(sections)
+        logo_bytes = await logo.read() if logo else None
+        latex_content = build_tex_from_sections(section_dict)
+        loop = asyncio.get_event_loop()
+        pdf_bytes = await loop.run_in_executor(
+            executor, compile_latex_with_logo, latex_content, logo_bytes
+        )
+        pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
+        return CompileResponse(pdf=pdf_base64)
+    except Exception as e:
+        print(f"❌ Compile error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
