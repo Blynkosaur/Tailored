@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Download, Github, RefreshCw, Star } from "lucide-react";
+import { Download, Github, RefreshCw, Star, X } from "lucide-react";
 
 type InputMode = "url" | "text" | "pdf";
 
@@ -122,6 +122,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const lastCompiledRef = useRef<string | null>(null);
   const previousPdfUrlRef = useRef<string | null>(null);
+  const [lastCompiledSnapshot, setLastCompiledSnapshot] = useState<string | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -183,6 +184,7 @@ export default function Home() {
     setShowPdf(false);
     setLetterSections(null);
     lastCompiledRef.current = null;
+    setLastCompiledSnapshot(null);
 
     try {
       const formData = new FormData();
@@ -244,7 +246,9 @@ export default function Home() {
         setError(null);
       }
       setLetterSections(sections);
-      lastCompiledRef.current = JSON.stringify(sections);
+      const snapshot = JSON.stringify(sections);
+      lastCompiledRef.current = snapshot;
+      setLastCompiledSnapshot(snapshot);
       setShowPdf(true); // open the letter pane so PDF content is displayed and editable right away
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -290,7 +294,9 @@ export default function Home() {
         if (previousPdfUrlRef.current) URL.revokeObjectURL(previousPdfUrlRef.current);
         previousPdfUrlRef.current = url;
         setPdfUrl(url);
-        lastCompiledRef.current = JSON.stringify(sections);
+        const snapshot = JSON.stringify(sections);
+        lastCompiledRef.current = snapshot;
+        setLastCompiledSnapshot(snapshot);
         setError(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Compilation failed");
@@ -316,6 +322,12 @@ export default function Home() {
     (inputMode === "url" ? jobUrl : inputMode === "text" ? jobDescription : jobPdfFile);
 
   const hasPdf = !!pdfUrl;
+  const currentSectionsSnapshot =
+    letterSections != null ? JSON.stringify(letterSections) : null;
+  const isPdfSynced =
+    currentSectionsSnapshot != null &&
+    lastCompiledSnapshot != null &&
+    currentSectionsSnapshot === lastCompiledSnapshot;
 
   const [leftPanePercent, setLeftPanePercent] = useState(50); // default 50/50 split
   const splitRef = useRef<HTMLDivElement>(null);
@@ -365,24 +377,20 @@ export default function Home() {
   return (
     <div
       ref={splitRef}
-      className={`flex min-h-screen w-full transition-[background] duration-300 ${
-        hasPdf ? "flex-row" : ""
-      }`}
+      className="flex min-h-screen w-full transition-[background] duration-300 flex-col lg:flex-row lg:h-screen lg:overflow-hidden"
+      style={
+        hasPdf && showPdf
+          ? ({ "--left-pct": `${leftPanePercent}%`, "--right-pct": `${100 - leftPanePercent}%` } as React.CSSProperties)
+          : undefined
+      }
     >
       {/* Left pane: form + actions */}
       <div
-        className={`min-h-screen overflow-auto shrink-0 ${
-          hasPdf ? "" : "w-full"
+        className={`min-h-screen overflow-auto w-full ${
+          hasPdf && showPdf
+            ? "lg:shrink-0 lg:min-w-[280px] lg:max-w-[calc(80%-8px)] lg:w-[calc(var(--left-pct)-4px)]"
+            : "lg:w-full"
         }`}
-        style={
-          hasPdf
-            ? {
-                width: showPdf ? `calc(${leftPanePercent}% - 4px)` : "100%",
-                minWidth: showPdf ? 280 : undefined,
-                maxWidth: showPdf ? "calc(80% - 8px)" : undefined,
-              }
-            : undefined
-        }
       >
         <div className="max-w-xl mx-auto p-8 flex flex-col">
           <h1 className="text-4xl font-bold mb-6 font-[family-name:var(--font-shizuru)]">
@@ -557,38 +565,208 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Resize handle (only when split is open) */}
+      {/* Mobile-only: editable viewer popup */}
+      {hasPdf && showPdf && letterSections && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-background lg:hidden"
+          aria-modal="true"
+          role="dialog"
+          aria-label="Editing"
+        >
+          <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-background shrink-0">
+            <h2 className="text-lg font-semibold">Editing</h2>
+            <div className="flex items-center gap-2">
+              {lastCompiledSnapshot != null && (
+                <span
+                  className={`flex items-center gap-1.5 text-sm font-medium ${
+                    isPdfSynced ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${
+                      isPdfSynced
+                        ? "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]"
+                        : "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]"
+                    }`}
+                  />
+                  {isPdfSynced ? "Synced" : "Modified"}
+                </span>
+              )}
+              {isCompiling ? (
+                <span className="text-sm text-muted-foreground animate-pulse">
+                  Recompiling…
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => recompile(letterSections)}
+                  className="p-1.5 rounded-md border border-border bg-background hover:bg-muted transition-colors"
+                  title="Recompile PDF"
+                  aria-label="Recompile PDF"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowPdf(false)}
+                className="p-1.5 rounded-md border border-border bg-background hover:bg-muted transition-colors"
+                title="Close"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 p-6 overflow-auto">
+            <article
+              className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-[11pt] leading-relaxed"
+              style={{ boxShadow: "var(--shadow-pdf, 0 0 20px rgba(0,0,0,0.1))" }}
+            >
+              {logoPreviewUrl && (
+                <div className="mb-4">
+                  <img
+                    src={logoPreviewUrl}
+                    alt="Logo"
+                    className="max-w-[40%] h-auto"
+                  />
+                </div>
+              )}
+              <div className="flex flex-col items-end gap-0.5 mb-4">
+                <EditableBlock
+                  sectionKey="date"
+                  value={letterSections.date ?? new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                  placeholder="Month Day, Year"
+                  onEdit={updateSection}
+                />
+                <EditableBlock
+                  sectionKey="sender_name"
+                  value={letterSections.sender_name ?? ""}
+                  placeholder="Your name"
+                  onEdit={updateSection}
+                />
+                {letterSections.sender_email != null && (
+                  <EditableBlock
+                    sectionKey="sender_email"
+                    value={letterSections.sender_email ?? ""}
+                    placeholder="your@email.com"
+                    onEdit={updateSection}
+                  />
+                )}
+              </div>
+              <div className="mb-4 whitespace-pre-line">
+                <EditableBlock
+                  sectionKey="addressee"
+                  value={letterSections.addressee ?? ""}
+                  placeholder="Hiring Manager\nTitle\nCompany\nAddress"
+                  onEdit={updateSection}
+                  block
+                />
+              </div>
+              <div className="mb-4">
+                <EditableBlock
+                  sectionKey="greeting"
+                  value={letterSections.greeting ?? ""}
+                  placeholder="Dear Hiring Manager,"
+                  onEdit={updateSection}
+                />
+              </div>
+              <div className="space-y-4 mb-4">
+                <EditableBlock
+                  sectionKey="intro"
+                  value={letterSections.intro ?? ""}
+                  placeholder="Opening paragraph…"
+                  onEdit={updateSection}
+                  block
+                />
+                <EditableBlock
+                  sectionKey="body_1"
+                  value={letterSections.body_1 ?? ""}
+                  placeholder="Second paragraph…"
+                  onEdit={updateSection}
+                  block
+                />
+                <EditableBlock
+                  sectionKey="body_2"
+                  value={letterSections.body_2 ?? ""}
+                  placeholder="Third paragraph…"
+                  onEdit={updateSection}
+                  block
+                />
+                <EditableBlock
+                  sectionKey="closing"
+                  value={letterSections.closing ?? ""}
+                  placeholder="Optional closing sentence…"
+                  onEdit={updateSection}
+                  block
+                />
+              </div>
+              <div className="mb-2">
+                <EditableBlock
+                  sectionKey="sincerely"
+                  value={letterSections.sincerely ?? "Sincerely yours,"}
+                  placeholder="Sincerely yours,"
+                  onEdit={updateSection}
+                />
+              </div>
+              <div className="mt-6">
+                <EditableBlock
+                  sectionKey="signature"
+                  value={letterSections.signature ?? ""}
+                  placeholder="Your name"
+                  onEdit={updateSection}
+                />
+              </div>
+            </article>
+          </div>
+        </div>
+      )}
+
+      {/* Resize handle (only when split is open, hidden on mobile/tablet) */}
       {hasPdf && showPdf && letterSections && (
         <div
           data-resize-handle
-          className="shrink-0 w-2 cursor-col-resize border-l border-r border-border bg-muted/50 hover:bg-muted transition-colors flex items-center justify-center group"
+          className="hidden lg:flex shrink-0 w-2 cursor-col-resize border-l border-r border-border bg-muted/50 hover:bg-muted transition-colors items-center justify-center group"
           aria-label="Resize panes"
         >
           <div className="w-1 h-8 rounded-full bg-border group-hover:bg-foreground/30 transition-colors" />
         </div>
       )}
 
-      {/* Right pane: HTML letter (PDF-like layout, contenteditable sections) */}
+      {/* Right pane: HTML letter (editable) — desktop only (lg+) */}
       {hasPdf && letterSections && (
         <div
-          className={`flex flex-col border-l border-border bg-muted/30 overflow-hidden transition-all duration-300 ease-out shrink-0 ${
+          className={`flex flex-col border-l border-border bg-muted/30 overflow-hidden transition-all duration-300 ease-out shrink-0 min-h-0 ${
             showPdf
-              ? "opacity-100"
+              ? "opacity-100 w-full min-h-[50vh] hidden lg:flex lg:w-[calc(var(--right-pct)-4px)] lg:min-w-[280px] lg:min-h-0"
               : "w-0 min-w-0 max-w-0 opacity-0"
           }`}
-          style={
-            showPdf
-              ? {
-                  width: `calc(${100 - leftPanePercent}% - 4px)`,
-                  minWidth: 280,
-                }
-              : undefined
-          }
         >
-          <div className="flex flex-col h-full min-h-0 overflow-auto">
+          <div className="flex flex-col flex-1 min-h-0">
             <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-background shrink-0">
-              <h2 className="text-lg font-semibold">Cover letter (editable)</h2>
-              <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold">Editing</h2>
+              <div className="flex items-center gap-3">
+                {letterSections != null && lastCompiledSnapshot != null && (
+                  <span
+                    className={`flex items-center gap-1.5 text-sm font-medium ${
+                      isPdfSynced ? "text-green-600" : "text-red-600"
+                    }`}
+                    title={
+                      isPdfSynced
+                        ? "PDF is in sync with edits"
+                        : "Edits not yet compiled to PDF"
+                    }
+                  >
+                    <span
+                      className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${
+                        isPdfSynced
+                          ? "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]"
+                          : "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]"
+                      }`}
+                    />
+                    {isPdfSynced ? "Synced" : "Modified"}
+                  </span>
+                )}
                 {isCompiling ? (
                   <span className="text-sm text-muted-foreground animate-pulse">
                     Recompiling…
