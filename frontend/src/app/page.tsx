@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Download, Github, Star } from "lucide-react";
+import { Download, Github, RefreshCw, Star } from "lucide-react";
 
 type InputMode = "url" | "text" | "pdf";
 
@@ -19,8 +19,21 @@ function EditableBlock({
   block?: boolean;
 }) {
   const Tag = block ? "div" : "span";
+  const ref = useRef<HTMLDivElement | HTMLSpanElement>(null);
+
+  // Sync value from props into DOM only when this block is not focused.
+  // While focused, React must not overwrite content or the cursor jumps to the start and typing appears backwards.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || (document.activeElement && el.contains(document.activeElement))) return;
+    if (el.textContent !== value) {
+      el.textContent = value;
+    }
+  }, [value]);
+
   return (
     <Tag
+      ref={ref}
       contentEditable
       suppressContentEditableWarning
       className="outline-none focus:ring-1 focus:ring-ring rounded px-0.5 min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"
@@ -33,15 +46,66 @@ function EditableBlock({
         const text = (e.target as HTMLElement).innerText ?? "";
         onEdit(sectionKey, text);
       }}
-    >
-      {value}
-    </Tag>
+    />
   );
 }
 
 const RECOMPILE_DEBOUNCE_MS = 1500;
 
 export type LetterSections = Record<string, string>;
+
+/** Build viewer sections from /generate response (sections + explicit template fields). Uses explicit fields first so the viewer always matches the PDF. */
+function buildLetterSectionsFromGenerateResponse(data: {
+  sections?: Record<string, string> | null;
+  date?: string | null;
+  sender_block?: string | null;
+  addressee_tex?: string | null;
+  greeting?: string | null;
+  intro?: string | null;
+  body_1?: string | null;
+  body_2?: string | null;
+  closing?: string | null;
+  sincerely?: string | null;
+  signature?: string | null;
+}): LetterSections {
+  const isSectionsObj =
+    data.sections != null &&
+    typeof data.sections === "object" &&
+    !Array.isArray(data.sections);
+  const sections: Record<string, string> = isSectionsObj ? data.sections : {};
+  // Start from explicit template fields (same as in PDF) so viewer always shows what’s in the PDF
+  const base: LetterSections = {
+    date: typeof data.date === "string" ? data.date : (sections.date ?? ""),
+    greeting: typeof data.greeting === "string" ? data.greeting : (sections.greeting ?? ""),
+    intro: typeof data.intro === "string" ? data.intro : (sections.intro ?? ""),
+    body_1: typeof data.body_1 === "string" ? data.body_1 : (sections.body_1 ?? ""),
+    body_2: typeof data.body_2 === "string" ? data.body_2 : (sections.body_2 ?? ""),
+    closing: typeof data.closing === "string" ? data.closing : (sections.closing ?? ""),
+    sincerely: typeof data.sincerely === "string" ? data.sincerely : (sections.sincerely ?? "Sincerely yours,"),
+    signature: typeof data.signature === "string" ? data.signature : (sections.signature ?? ""),
+  };
+  // Sender: from explicit sender_block or from sections
+  if (typeof data.sender_block === "string" && data.sender_block.trim()) {
+    const lines = data.sender_block.trim().split(/\n/).map((s) => s.trim()).filter(Boolean);
+    base.sender_name = lines[0] ?? "";
+    if (lines.length > 1) base.sender_email = lines.slice(1).join("\n");
+    else if (sections.sender_email !== undefined) base.sender_email = sections.sender_email;
+  } else {
+    base.sender_name = sections.sender_name ?? "";
+    base.sender_email = sections.sender_email ?? "";
+  }
+  // Addressee: from explicit addressee_tex or from sections
+  if (typeof data.addressee_tex === "string" && data.addressee_tex.trim()) {
+    base.addressee = data.addressee_tex.trim();
+  } else {
+    base.addressee = sections.addressee ?? "";
+  }
+  // Overlay any other keys from sections (e.g. company_name) so we don’t drop anything
+  for (const [k, v] of Object.entries(sections)) {
+    if (typeof v === "string" && base[k] === undefined) base[k] = v;
+  }
+  return base;
+}
 
 export default function Home() {
   const [inputMode, setInputMode] = useState<InputMode>("url");
@@ -147,13 +211,41 @@ export default function Home() {
       }
 
       const data = await response.json();
+      const logPayload: Record<string, unknown> = {};
+      for (const key of Object.keys(data)) {
+        if (key === "pdf" && typeof data.pdf === "string") {
+          logPayload[key] = `[base64 length: ${data.pdf.length}]`;
+        } else {
+          logPayload[key] = data[key];
+        }
+      }
+      console.log("[Tailored] Generate response (full):", logPayload);
+
       const pdfBlob = base64ToBlob(data.pdf, "application/pdf");
       const url = URL.createObjectURL(pdfBlob);
       previousPdfUrlRef.current = url;
       setPdfUrl(url);
-      const sections: LetterSections = data.sections ?? {};
+      // Build viewer state from full response: sections + explicit template fields so the editable viewer always has everything
+      const sections: LetterSections = buildLetterSectionsFromGenerateResponse(data);
+      const hasContent =
+        (sections.intro?.trim() ?? "") !== "" ||
+        (sections.body_1?.trim() ?? "") !== "" ||
+        (sections.addressee?.trim() ?? "") !== "";
+      if (!hasContent) {
+        console.warn(
+          "[Tailored] No section content. Expected response keys: pdf, sections, date, intro, body_1, etc. Run backend locally: cd backend && uvicorn api:app --reload (and ensure API_URL is http://localhost:8000 or unset)"
+        );
+      }
+      if (!hasContent) {
+        setError(
+          "Cover letter was generated but the editable text did not load. Try again, or ensure your backend is running locally with the latest code (returns sections + date, intro, body_1, etc.). You can still download the PDF."
+        );
+      } else {
+        setError(null);
+      }
       setLetterSections(sections);
       lastCompiledRef.current = JSON.stringify(sections);
+      setShowPdf(true); // open the letter pane so PDF content is displayed and editable right away
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -225,9 +317,13 @@ export default function Home() {
 
   const hasPdf = !!pdfUrl;
 
-  const [leftPanePercent, setLeftPanePercent] = useState(50);
+  const [leftPanePercent, setLeftPanePercent] = useState(50); // default 50/50 split
   const splitRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
+
+  useEffect(() => {
+    if (showPdf) setLeftPanePercent(50);
+  }, [showPdf]);
 
   const updateSection = useCallback((key: string, text: string) => {
     setLetterSections((prev) => (prev ? { ...prev, [key]: text } : prev));
@@ -492,11 +588,23 @@ export default function Home() {
           <div className="flex flex-col h-full min-h-0 overflow-auto">
             <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-background shrink-0">
               <h2 className="text-lg font-semibold">Cover letter (editable)</h2>
-              {isCompiling && (
-                <span className="text-sm text-muted-foreground animate-pulse">
-                  Recompiling…
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {isCompiling ? (
+                  <span className="text-sm text-muted-foreground animate-pulse">
+                    Recompiling…
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => letterSections && recompile(letterSections)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-border bg-background hover:bg-muted transition-colors"
+                    title="Recompile PDF from current edits"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Recompile
+                  </button>
+                )}
+              </div>
             </div>
             {/* Ghost overlay: HTML/CSS letter that looks like the PDF */}
             <div className="flex-1 min-h-0 p-6 overflow-auto">
@@ -513,25 +621,27 @@ export default function Home() {
                     />
                   </div>
                 )}
-                <div className="border-b border-black pb-2 mb-4" />
-                <div className="flex justify-end mb-4">
-                  <div className="text-right space-y-0.5">
-                    <p className="text-sm text-gray-600">{new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+                <div className="flex flex-col items-end gap-0.5 mb-4">
+                  <EditableBlock
+                    sectionKey="date"
+                    value={letterSections.date ?? new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                    placeholder="Month Day, Year"
+                    onEdit={updateSection}
+                  />
+                  <EditableBlock
+                    sectionKey="sender_name"
+                    value={letterSections.sender_name ?? ""}
+                    placeholder="Your name"
+                    onEdit={updateSection}
+                  />
+                  {letterSections.sender_email != null && (
                     <EditableBlock
-                      sectionKey="sender_name"
-                      value={letterSections.sender_name ?? ""}
-                      placeholder="Your name"
+                      sectionKey="sender_email"
+                      value={letterSections.sender_email ?? ""}
+                      placeholder="your@email.com"
                       onEdit={updateSection}
                     />
-                    {letterSections.sender_email != null && (
-                      <EditableBlock
-                        sectionKey="sender_email"
-                        value={letterSections.sender_email ?? ""}
-                        placeholder="your@email.com"
-                        onEdit={updateSection}
-                      />
-                    )}
-                  </div>
+                  )}
                 </div>
                 <div className="mb-4 whitespace-pre-line">
                   <EditableBlock
@@ -580,7 +690,14 @@ export default function Home() {
                     block
                   />
                 </div>
-                <p className="mb-2">Sincerely yours,</p>
+                <div className="mb-2">
+                  <EditableBlock
+                    sectionKey="sincerely"
+                    value={letterSections.sincerely ?? "Sincerely yours,"}
+                    placeholder="Sincerely yours,"
+                    onEdit={updateSection}
+                  />
+                </div>
                 <div className="mt-6">
                   <EditableBlock
                     sectionKey="signature"

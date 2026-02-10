@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from datetime import datetime
 
 from dotenv import load_dotenv
 from google import genai
@@ -392,8 +393,10 @@ Description: {company_info.get('description', 'Not available')}
         text = "\n".join(lines)
     parsed = json.loads(text)
 
-    # Normalize keys and ensure strings
+    # Normalize keys and ensure strings; add date and sincerely so everything is editable
+    today = datetime.now().strftime("%B %d, %Y")
     sections = {
+        "date": today,
         "sender_name": contact_info.get("name", "Candidate"),
         "sender_email": contact_info.get("email") or "",
         "addressee": (parsed.get("addressee") or "").replace("\\n", "\n"),
@@ -402,6 +405,7 @@ Description: {company_info.get('description', 'Not available')}
         "body_1": parsed.get("body_1") or "",
         "body_2": parsed.get("body_2") or "",
         "closing": parsed.get("closing") or "",
+        "sincerely": "Sincerely yours,",
         "signature": parsed.get("signature") or contact_info.get("name", "Candidate"),
     }
     return sections

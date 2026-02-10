@@ -65,11 +65,26 @@ app.add_middleware(
 class GenerateResponse(BaseModel):
     pdf: str  # base64 encoded PDF
     sections: dict  # tokenized sections for editable HTML view (sender_name, addressee, greeting, intro, body_1, body_2, closing, signature)
+    # All template fields (same names as in cover_letter_template.tex)
+    date: str = ""
+    sender_block: str = ""
+    addressee_tex: str = ""
+    greeting: str = ""
+    intro: str = ""
+    body_1: str = ""
+    body_2: str = ""
+    closing: str = ""
+    sincerely: str = ""
+    signature: str = ""
     company_name: str | None = None
 
 
 class CompileResponse(BaseModel):
     pdf: str  # base64 encoded PDF
+
+
+class LatexResponse(BaseModel):
+    latex: str  # built LaTeX source from sections (same as used for PDF)
 
 
 # Template-to-token: load once
@@ -86,6 +101,31 @@ def _escape_latex(s: str) -> str:
     return s
 
 
+def _sections_to_template_fields(sections: dict) -> dict:
+    """Build template-shaped fields from sections (plain text, no LaTeX escaping). For API response."""
+    sender_name = (sections.get("sender_name") or "").strip()
+    sender_email = (sections.get("sender_email") or "").strip()
+    sender_block = sender_name
+    if sender_email:
+        sender_block = sender_name + "\n" + sender_email
+
+    addressee = sections.get("addressee") or ""
+    addressee_tex = "\n".join(line.strip() for line in addressee.split("\n") if line.strip())
+
+    return {
+        "date": sections.get("date") or "",
+        "sender_block": sender_block,
+        "addressee_tex": addressee_tex,
+        "greeting": sections.get("greeting") or "",
+        "intro": sections.get("intro") or "",
+        "body_1": sections.get("body_1") or "",
+        "body_2": sections.get("body_2") or "",
+        "closing": sections.get("closing") or "",
+        "sincerely": sections.get("sincerely") or "Sincerely yours,",
+        "signature": sections.get("signature") or "",
+    }
+
+
 def build_tex_from_sections(sections: dict) -> str:
     """Inject section tokens into the cover letter template. Sections dict has sender_name, sender_email, addressee, greeting, intro, body_1, body_2, closing, signature."""
     sender_name = _escape_latex(sections.get("sender_name") or "")
@@ -100,11 +140,13 @@ def build_tex_from_sections(sections: dict) -> str:
     replacements = {
         "sender_block": sender_block,
         "addressee_tex": addressee_tex or " ",
+        "date": _escape_latex(sections.get("date") or ""),
         "greeting": _escape_latex(sections.get("greeting") or ""),
         "intro": _escape_latex(sections.get("intro") or ""),
         "body_1": _escape_latex(sections.get("body_1") or ""),
         "body_2": _escape_latex(sections.get("body_2") or ""),
         "closing": _escape_latex(sections.get("closing") or ""),
+        "sincerely": _escape_latex(sections.get("sincerely") or "Sincerely yours,"),
         "signature": _escape_latex(sections.get("signature") or ""),
     }
     tex = _COVER_LETTER_TEMPLATE
@@ -242,8 +284,23 @@ async def generate_cover_letter(
         )
 
         pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
+        fields = _sections_to_template_fields(sections)
         print("✅ Cover letter generated successfully")
-        return GenerateResponse(pdf=pdf_base64, sections=sections)
+        print("   Response includes sections keys:", list(sections.keys()))
+        return GenerateResponse(
+            pdf=pdf_base64,
+            sections=sections,
+            date=fields["date"],
+            sender_block=fields["sender_block"],
+            addressee_tex=fields["addressee_tex"],
+            greeting=fields["greeting"],
+            intro=fields["intro"],
+            body_1=fields["body_1"],
+            body_2=fields["body_2"],
+            closing=fields["closing"],
+            sincerely=fields["sincerely"],
+            signature=fields["signature"],
+        )
 
     except JobInfoError as e:
         print(f"❌ Job info error: {e}")
@@ -275,6 +332,27 @@ async def compile_sections(
         return CompileResponse(pdf=pdf_base64)
     except Exception as e:
         print(f"❌ Compile error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class LatexBody(BaseModel):
+    sections: dict
+
+
+@app.post("/latex", response_model=LatexResponse)
+async def get_latex(
+    body: LatexBody,
+    _: HTTPAuthorizationCredentials = Depends(verify_token),
+):
+    """
+    Return the LaTeX source built from the given sections (same template used for PDF).
+    Useful to inspect or load the rendered PDF content.
+    """
+    try:
+        latex_content = build_tex_from_sections(body.sections)
+        return LatexResponse(latex=latex_content)
+    except Exception as e:
+        print(f"❌ LaTeX build error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
