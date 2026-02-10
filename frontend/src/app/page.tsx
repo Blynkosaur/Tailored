@@ -33,7 +33,7 @@ function EditableBlock({
 
   return (
     <Tag
-      ref={ref}
+      ref={ref as React.Ref<HTMLDivElement>}
       contentEditable
       suppressContentEditableWarning
       className="outline-none focus:ring-1 focus:ring-ring rounded px-0.5 min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"
@@ -72,7 +72,7 @@ function buildLetterSectionsFromGenerateResponse(data: {
     data.sections != null &&
     typeof data.sections === "object" &&
     !Array.isArray(data.sections);
-  const sections: Record<string, string> = isSectionsObj ? data.sections : {};
+  const sections: Record<string, string> = (isSectionsObj ? data.sections : {}) as Record<string, string>;
   // Start from explicit template fields (same as in PDF) so viewer always shows what’s in the PDF
   const base: LetterSections = {
     date: typeof data.date === "string" ? data.date : (sections.date ?? ""),
