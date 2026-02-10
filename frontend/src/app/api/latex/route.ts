@@ -5,33 +5,28 @@ const API_KEY = process.env.API_KEY || "";
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-
-    const response = await fetch(`${API_URL}/generate`, {
+    const body = await request.json();
+    const response = await fetch(`${API_URL}/latex`, {
       method: "POST",
-      body: formData,
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Bearer ${API_KEY}`,
       },
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       const error = await response.json();
       return NextResponse.json(
-        { detail: error.detail || "Backend error" },
+        { detail: error.detail || "Failed to get LaTeX" },
         { status: response.status }
       );
     }
 
-    // Forward the backend response body as-is so sections and all fields reach the client (avoids re-parse/size issues)
-    const contentType = response.headers.get("content-type") || "application/json";
-    const body = await response.text();
-    return new NextResponse(body, {
-      status: 200,
-      headers: { "Content-Type": contentType },
-    });
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Proxy error:", error);
+    console.error("Latex proxy error:", error);
     return NextResponse.json(
       { detail: "Failed to connect to backend" },
       { status: 500 }

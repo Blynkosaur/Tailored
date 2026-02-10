@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
 
-    const response = await fetch(`${API_URL}/generate`, {
+    const response = await fetch(`${API_URL}/compile`, {
       method: "POST",
       body: formData,
       headers: {
@@ -18,20 +18,15 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const error = await response.json();
       return NextResponse.json(
-        { detail: error.detail || "Backend error" },
+        { detail: error.detail || "Compilation failed" },
         { status: response.status }
       );
     }
 
-    // Forward the backend response body as-is so sections and all fields reach the client (avoids re-parse/size issues)
-    const contentType = response.headers.get("content-type") || "application/json";
-    const body = await response.text();
-    return new NextResponse(body, {
-      status: 200,
-      headers: { "Content-Type": contentType },
-    });
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Proxy error:", error);
+    console.error("Compile proxy error:", error);
     return NextResponse.json(
       { detail: "Failed to connect to backend" },
       { status: 500 }

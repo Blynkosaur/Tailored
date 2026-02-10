@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from datetime import datetime
 
 from dotenv import load_dotenv
 from google import genai
@@ -321,6 +322,93 @@ IMPORTANT: For contact info, use ONLY what is provided in the CANDIDATE CONTACT 
     latex_content = latex_content.replace('\\\\%', '\\%')
 
     return latex_content
+
+
+COVER_LETTER_SECTIONS_JSON_PROMPT = """You are an expert cover letter writer. Output ONLY a single JSON object (no markdown, no code fences, no explanation).
+
+Given the candidate contact info, company research, resume, and job description below, produce a cover letter as a JSON object with these exact keys:
+
+- "addressee": string with 4 lines separated by newline (\\n): line1 = hiring manager name or "Hiring Manager", line2 = job title or "Recruitment Team", line3 = company name, line4 = company address (or empty line if unknown)
+- "greeting": string, e.g. "Dear Hiring Manager," or "Dear Ms. Smith,"
+- "intro": string, first paragraph (opening: state position, enthusiasm, company knowledge)
+- "body_1": string, second paragraph (match qualifications to job, specific examples)
+- "body_2": string, third paragraph (closing: reiterate interest, thank reader)
+- "closing": string, optional short closing sentence before sign-off (can be empty string)
+- "signature": string, candidate full name only
+
+Rules: Use ONLY the contact info from CANDIDATE CONTACT INFO. Never add URLs, LinkedIn, GitHub. No placeholder text. If info is missing, omit or use "Hiring Manager" / leave line empty. Write complete professional sentences."""
+
+
+def generate_cover_letter_sections(resume_text: str, job_description: str) -> dict:
+    """
+    Generate cover letter content as a JSON-serializable dict of sections
+    for template injection and editable HTML view.
+    """
+    print("📋 Extracting contact info...")
+    contact_info = extract_contact_info(resume_text)
+    print("🔍 Researching company description...")
+    company_info = get_company_info(job_description)
+
+    contact_section = "\n".join([
+        f"Name: {contact_info.get('name', 'Candidate')}",
+        *([f"Email: {contact_info['email']}"] if contact_info.get("email") else []),
+        *([f"Phone: {contact_info['phone']}"] if contact_info.get("phone") else []),
+    ])
+    company_context = f"""=== CANDIDATE CONTACT INFO (use ONLY this) ===
+{contact_section}
+=== END ===
+
+=== COMPANY RESEARCH ===
+Company: {company_info.get('company_name', 'Unknown')}
+Description: {company_info.get('description', 'Not available')}
+=== END ===
+
+=== RESUME (experience/skills only) ===
+{resume_text[:6000]}
+=== END ===
+
+=== JOB DESCRIPTION ===
+{job_description[:6000]}
+=== END ===
+"""
+
+    user_message = company_context + "\nOutput the cover letter as JSON with keys: addressee, greeting, intro, body_1, body_2, closing, signature."
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=user_message,
+        config={
+            "system_instruction": COVER_LETTER_SECTIONS_JSON_PROMPT,
+            "temperature": 0.7,
+        },
+    )
+
+    text = response.text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines[-1].strip() == "```":
+            lines = lines[1:-1]
+        else:
+            lines = lines[1:]
+        text = "\n".join(lines)
+    parsed = json.loads(text)
+
+    # Normalize keys and ensure strings; add date and sincerely so everything is editable
+    today = datetime.now().strftime("%B %d, %Y")
+    sections = {
+        "date": today,
+        "sender_name": contact_info.get("name", "Candidate"),
+        "sender_email": contact_info.get("email") or "",
+        "addressee": (parsed.get("addressee") or "").replace("\\n", "\n"),
+        "greeting": parsed.get("greeting") or "Dear Hiring Manager,",
+        "intro": parsed.get("intro") or "",
+        "body_1": parsed.get("body_1") or "",
+        "body_2": parsed.get("body_2") or "",
+        "closing": parsed.get("closing") or "",
+        "sincerely": "Sincerely yours,",
+        "signature": parsed.get("signature") or contact_info.get("name", "Candidate"),
+    }
+    return sections
 
 
 def format_job_for_prompt(job_data: dict) -> str:
