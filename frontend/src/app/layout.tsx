@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Comfortaa, Shizuru, Coming_Soon } from "next/font/google";
+import { Inconsolata, Shizuru, Coming_Soon } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
-const comfortaa = Comfortaa({
-  variable: "--font-comfortaa",
+const inconsolata = Inconsolata({
+  variable: "--font-inconsolata",
   subsets: ["latin"],
 });
 
@@ -34,7 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${comfortaa.variable} ${shizuru.variable} ${comingSoon.variable} antialiased font-sans`}
+        className={`${inconsolata.variable} ${shizuru.variable} ${comingSoon.variable} antialiased font-sans`}
       >
         <main>{children}</main>
         <SpeedInsights />
