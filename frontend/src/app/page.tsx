@@ -592,12 +592,13 @@ export default function Home() {
       {/* Mobile-only: editable viewer popup */}
       {hasPdf && showPdf && letterSections && (
         <div
-          className="fixed inset-0 z-50 flex flex-col bg-background lg:hidden"
+          className="fixed inset-0 z-50 flex flex-col bg-background lg:hidden h-[100dvh] max-h-[100dvh] overflow-hidden"
+          style={{ height: "100dvh", maxHeight: "100dvh" }}
           aria-modal="true"
           role="dialog"
           aria-label="Editing"
         >
-          <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-background shrink-0">
+          <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-background shrink-0 flex-shrink-0">
             <h2 className="text-lg font-semibold">Editing</h2>
             <div className="flex items-center gap-2">
               {lastCompiledSnapshot != null && (
@@ -642,7 +643,7 @@ export default function Home() {
               </button>
             </div>
           </div>
-          <div className="flex-1 min-h-0 p-6 overflow-auto">
+          <div className="flex-1 min-h-0 min-w-0 p-6 overflow-auto overflow-x-hidden overscroll-contain">
             <article
               className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-[11pt] leading-relaxed"
               style={{ boxShadow: "var(--shadow-pdf, 0 0 20px rgba(0,0,0,0.1))" }}
