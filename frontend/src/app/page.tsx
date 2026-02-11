@@ -123,7 +123,27 @@ export default function Home() {
   const lastCompiledRef = useRef<string | null>(null);
   const previousPdfUrlRef = useRef<string | null>(null);
   const [lastCompiledSnapshot, setLastCompiledSnapshot] = useState<string | null>(null);
+  const [lastCompiledLogoSignature, setLastCompiledLogoSignature] = useState<{
+    name: string;
+    size: number;
+    lastModified: number;
+  } | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+
+  const getLogoSignature = useCallback((file: File | null) => {
+    if (!file) return null;
+    return { name: file.name, size: file.size, lastModified: file.lastModified };
+  }, []);
+
+  const logoSignatureMatches = useCallback(
+    (current: File | null, last: typeof lastCompiledLogoSignature) => {
+      const cur = getLogoSignature(current);
+      if (cur === null && last === null) return true;
+      if (cur === null || last === null) return false;
+      return cur.name === last.name && cur.size === last.size && cur.lastModified === last.lastModified;
+    },
+    [getLogoSignature]
+  );
 
   useEffect(() => {
     if (!logoFile) {
@@ -185,6 +205,7 @@ export default function Home() {
     setLetterSections(null);
     lastCompiledRef.current = null;
     setLastCompiledSnapshot(null);
+    setLastCompiledLogoSignature(null);
 
     try {
       const formData = new FormData();
@@ -249,6 +270,7 @@ export default function Home() {
       const snapshot = JSON.stringify(sections);
       lastCompiledRef.current = snapshot;
       setLastCompiledSnapshot(snapshot);
+      setLastCompiledLogoSignature(getLogoSignature(logoFile));
       setShowPdf(true); // open the letter pane so PDF content is displayed and editable right away
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -297,6 +319,7 @@ export default function Home() {
         const snapshot = JSON.stringify(sections);
         lastCompiledRef.current = snapshot;
         setLastCompiledSnapshot(snapshot);
+        setLastCompiledLogoSignature(getLogoSignature(logoFile));
         setError(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Compilation failed");
@@ -304,7 +327,7 @@ export default function Home() {
         setIsCompiling(false);
       }
     },
-    [logoFile]
+    [logoFile, getLogoSignature]
   );
 
   useEffect(() => {
@@ -327,7 +350,8 @@ export default function Home() {
   const isPdfSynced =
     currentSectionsSnapshot != null &&
     lastCompiledSnapshot != null &&
-    currentSectionsSnapshot === lastCompiledSnapshot;
+    currentSectionsSnapshot === lastCompiledSnapshot &&
+    logoSignatureMatches(logoFile, lastCompiledLogoSignature);
 
   const [leftPanePercent, setLeftPanePercent] = useState(50); // default 50/50 split
   const splitRef = useRef<HTMLDivElement>(null);
@@ -623,15 +647,13 @@ export default function Home() {
               className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-[11pt] leading-relaxed"
               style={{ boxShadow: "var(--shadow-pdf, 0 0 20px rgba(0,0,0,0.1))" }}
             >
-              {logoPreviewUrl && (
-                <div className="mb-4">
-                  <img
-                    src={logoPreviewUrl}
-                    alt="Logo"
-                    className="max-w-[40%] h-auto"
-                  />
-                </div>
-              )}
+              <div className="mb-4">
+                <img
+                  src={logoPreviewUrl ?? "/school.png"}
+                  alt="Logo"
+                  className="max-w-[40%] h-auto"
+                />
+              </div>
               <div className="flex flex-col items-end gap-0.5 mb-4">
                 <EditableBlock
                   sectionKey="date"
@@ -790,15 +812,13 @@ export default function Home() {
                 className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-[11pt] leading-relaxed"
                 style={{ boxShadow: "var(--shadow-pdf, 0 0 20px rgba(0,0,0,0.1))" }}
               >
-                {logoPreviewUrl && (
-                  <div className="mb-4">
-                    <img
-                      src={logoPreviewUrl}
-                      alt="Logo"
-                      className="max-w-[40%] h-auto"
-                    />
-                  </div>
-                )}
+                <div className="mb-4">
+                  <img
+                    src={logoPreviewUrl ?? "/school.png"}
+                    alt="Logo"
+                    className="max-w-[40%] h-auto"
+                  />
+                </div>
                 <div className="flex flex-col items-end gap-0.5 mb-4">
                   <EditableBlock
                     sectionKey="date"
