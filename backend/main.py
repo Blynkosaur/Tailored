@@ -242,14 +242,14 @@ def generate_cover_letter_latex(resume_text: str, job_description: str) -> str:
         LaTeX source code for the cover letter.
     """
     # Extract contact info from resume using regex (no AI)
-    print("📋 Extracting contact info...")
+    print("Extracting contact info...")
     contact_info = extract_contact_info(resume_text)
     print(f"   Name: {contact_info.get('name', 'Unknown')}")
     print(f"   Email: {contact_info.get('email', 'Not found')}")
     print(f"   Phone: {contact_info.get('phone', 'Not found')}")
     
     # First call: Get company description
-    print("🔍 Researching company description...")
+    print("Researching company description...")
     company_info = get_company_info(job_description)
     print(f"   Company: {company_info.get('company_name', 'Unknown')}")
     print(f"   Description: {company_info.get('description', 'N/A')[:100]}...")
@@ -344,9 +344,9 @@ def generate_cover_letter_sections(resume_text: str, job_description: str) -> di
     Generate cover letter content as a JSON-serializable dict of sections
     for template injection and editable HTML view.
     """
-    print("📋 Extracting contact info...")
+    print("Extracting contact info...")
     contact_info = extract_contact_info(resume_text)
-    print("🔍 Researching company description...")
+    print("Researching company description...")
     company_info = get_company_info(job_description)
 
     contact_section = "\n".join([
@@ -482,39 +482,36 @@ def generate_cover_letter(
     Returns:
         Path to the saved cover letter PDF.
     """
-    print(f"📄 Parsing resume: {resume_path}")
+    print(f"Parsing resume: {resume_path}")
     resume_data = parse_resume(resume_path)
     resume_text = resume_data["text"]
     
-    print(f"🔍 Scraping job posting: {job_url}")
+    print(f"Scraping job posting: {job_url}")
     job_data = scrape_job_posting(job_url)
     print(format_job_data(job_data))
     
     job_description = format_job_for_prompt(job_data)
     
-    print(f"🤖 Generating cover letter with AI...")
+    print(f"Generating cover letter with AI...")
     latex_content = generate_cover_letter_latex(resume_text, job_description)
     
-    # Debug: Print the generated LaTeX
     print("\n" + "=" * 60)
     print("GENERATED LATEX:")
     print("=" * 60)
     print(latex_content)
     print("=" * 60 + "\n")
     
-    # Also save the LaTeX to a file for inspection
     latex_debug_path = RESUME_DIR / "cover_letter_debug.tex"
     latex_debug_path.write_text(latex_content)
-    print(f"📄 LaTeX saved to: {latex_debug_path}")
+    print(f"LaTeX saved to: {latex_debug_path}")
     
-    print(f"📝 Compiling LaTeX to PDF...")
+    print(f"Compiling LaTeX to PDF...")
     pdf_bytes = compile_latex(latex_content)
     
-    # Save to resume folder
     output_path = RESUME_DIR / output_filename
     output_path.write_bytes(pdf_bytes)
     
-    print(f"✅ Cover letter saved to: {output_path}")
+    print(f"Cover letter saved to: {output_path}")
     return output_path
 
 
@@ -534,48 +531,44 @@ def generate_cover_letter_from_text(
     Returns:
         Path to the saved cover letter PDF.
     """
-    print(f"📄 Parsing resume: {resume_path}")
+    print(f"Parsing resume: {resume_path}")
     resume_data = parse_resume(resume_path)
     resume_text = resume_data["text"]
     
-    print(f"🤖 Generating cover letter with AI...")
+    print(f"Generating cover letter with AI...")
     latex_content = generate_cover_letter_latex(resume_text, job_description)
     
-    print(f"📝 Compiling LaTeX to PDF...")
+    print(f"Compiling LaTeX to PDF...")
     pdf_bytes = compile_latex(latex_content)
     
-    # Save to resume folder
     output_path = RESUME_DIR / output_filename
     output_path.write_bytes(pdf_bytes)
     
-    print(f"✅ Cover letter saved to: {output_path}")
+    print(f"Cover letter saved to: {output_path}")
     return output_path
 
 
 if __name__ == "__main__":
     import sys
     
-    # Find resume in the resume folder
     resume_files = list(RESUME_DIR.glob("*.pdf"))
     resume_files = [f for f in resume_files if "cover_letter" not in f.name.lower()]
     
     if not resume_files:
-        print(f"❌ No resume PDF found in {RESUME_DIR}")
+        print(f"No resume PDF found in {RESUME_DIR}")
         sys.exit(1)
     
     resume_path = resume_files[0]
-    print(f"📄 Using resume: {resume_path.name}")
+    print(f"Using resume: {resume_path.name}")
     
-    # Get job URL from command line or prompt
     if len(sys.argv) > 1:
         job_url = sys.argv[1]
     else:
         job_url = input("Enter job posting URL: ").strip()
     
     if not job_url:
-        print("❌ No job URL provided")
+        print("No job URL provided")
         sys.exit(1)
     
-    # Generate the cover letter
     output_path = generate_cover_letter(resume_path, job_url)
-    print(f"\n🎉 Done! Open {output_path} to view your cover letter.")
+    print(f"\nDone! Open {output_path} to view your cover letter.")

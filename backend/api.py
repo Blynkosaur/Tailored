@@ -185,13 +185,11 @@ def compile_latex_with_logo(
         tex_path = os.path.join(tmp_dir, tex_file)
         pdf_path = os.path.join(tmp_dir, pdf_file)
 
-        # Save logo if provided
         if logo_bytes:
             logo_path = os.path.join(tmp_dir, "school.png")
             with open(logo_path, "wb") as f:
                 f.write(logo_bytes)
         else:
-            # Use default UWaterloo logo if exists (in backend folder)
             default_logo = Path(__file__).parent / "school.png"
             if default_logo.exists():
                 shutil.copy(default_logo, os.path.join(tmp_dir, "school.png"))
@@ -230,7 +228,6 @@ async def generate_cover_letter(
 
     Provide either job_url, job_description, or job_pdf (only one).
     """
-    # Validate input - count how many job inputs are provided
     job_inputs = sum([bool(job_url), bool(job_description), job_pdf is not None])
     
     if job_inputs == 0:
@@ -243,41 +240,35 @@ async def generate_cover_letter(
             status_code=400, detail="Provide only one of job_url, job_description, or job_pdf"
         )
 
-    # Validate resume file
     if not resume.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Resume must be a PDF file")
 
     try:
-        # Read uploaded files
         resume_bytes = await resume.read()
         logo_bytes = await logo.read() if logo else None
 
-        # Parse resume
-        print("📄 Parsing resume...")
+        print("Parsing resume...")
         resume_text = parse_resume_from_bytes(resume_bytes)
 
-        # Get job description
         if job_url:
-            print(f"🔍 Scraping job posting: {job_url}")
+            print(f"Scraping job posting: {job_url}")
             loop = asyncio.get_event_loop()
             job_data = await loop.run_in_executor(executor, scrape_job_posting, job_url)
             job_desc = format_job_for_prompt(job_data)
         elif job_pdf:
-            print("📄 Parsing job description PDF...")
+            print("Parsing job description PDF...")
             job_pdf_bytes = await job_pdf.read()
             job_desc = parse_resume_from_bytes(job_pdf_bytes)
         else:
             job_desc = job_description
 
-        # Generate sections (JSON) for template-to-token + editable HTML view
-        print("🤖 Generating cover letter sections...")
+        print("Generating cover letter sections...")
         loop = asyncio.get_event_loop()
         sections = await loop.run_in_executor(
             executor, generate_cover_letter_sections, resume_text, job_desc
         )
 
-        # Build .tex from template + sections, then compile
-        print("📝 Building LaTeX and compiling to PDF...")
+        print("Building LaTeX and compiling to PDF...")
         latex_content = build_tex_from_sections(sections)
         pdf_bytes = await loop.run_in_executor(
             executor, compile_latex_with_logo, latex_content, logo_bytes
@@ -285,8 +276,8 @@ async def generate_cover_letter(
 
         pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
         fields = _sections_to_template_fields(sections)
-        print("✅ Cover letter generated successfully")
-        print("   Response includes sections keys:", list(sections.keys()))
+        print("Cover letter generated successfully")
+        print("Response includes sections keys:", list(sections.keys()))
         return GenerateResponse(
             pdf=pdf_base64,
             sections=sections,
@@ -303,10 +294,10 @@ async def generate_cover_letter(
         )
 
     except JobInfoError as e:
-        print(f"❌ Job info error: {e}")
+        print(f"Job info error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -331,7 +322,7 @@ async def compile_sections(
         pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
         return CompileResponse(pdf=pdf_base64)
     except Exception as e:
-        print(f"❌ Compile error: {e}")
+        print(f"Compile error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -352,7 +343,7 @@ async def get_latex(
         latex_content = build_tex_from_sections(body.sections)
         return LatexResponse(latex=latex_content)
     except Exception as e:
-        print(f"❌ LaTeX build error: {e}")
+        print(f"LaTeX build error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -384,7 +384,7 @@ def format_job_data(job_data: dict) -> str:
     output.append("JOB POSTING ANALYSIS")
     output.append("=" * 60)
     
-    output.append(f"\n📌 BASIC INFO")
+    output.append(f"\nBASIC INFO")
     output.append(f"   Title: {job_data.get('title') or 'N/A'}")
     output.append(f"   Company: {job_data.get('company') or 'N/A'}")
     output.append(f"   Location: {job_data.get('location') or 'N/A'}")
@@ -393,32 +393,31 @@ def format_job_data(job_data: dict) -> str:
     output.append(f"   Salary: {job_data.get('salary') or 'N/A'}")
     
     if job_data.get("responsibilities"):
-        output.append(f"\n💼 RESPONSIBILITIES")
+        output.append(f"\nRESPONSIBILITIES")
         for item in job_data["responsibilities"][:10]:  # Limit to 10
             output.append(f"   • {item}")
     
     if job_data.get("requirements"):
-        output.append(f"\n✅ REQUIREMENTS")
+        output.append(f"\nREQUIREMENTS")
         for item in job_data["requirements"][:10]:
             output.append(f"   • {item}")
     
     if job_data.get("preferred_qualifications"):
-        output.append(f"\n⭐ PREFERRED QUALIFICATIONS")
+        output.append(f"\nPREFERRED QUALIFICATIONS")
         for item in job_data["preferred_qualifications"][:5]:
             output.append(f"   • {item}")
     
     if job_data.get("skills_mentioned"):
-        output.append(f"\n🛠️  SKILLS MENTIONED")
+        output.append(f"\nSKILLS MENTIONED")
         output.append(f"   {', '.join(job_data['skills_mentioned'])}")
     
     if job_data.get("benefits"):
-        output.append(f"\n🎁 BENEFITS")
+        output.append(f"\nBENEFITS")
         for item in job_data["benefits"][:5]:
             output.append(f"   • {item}")
     
     if job_data.get("about_company"):
-        output.append(f"\n📖 ABOUT THE COMPANY")
-        # Just show first paragraph
+        output.append(f"\nABOUT THE COMPANY")
         output.append(f"   {job_data['about_company'][0][:500]}")
     
     output.append("\n" + "=" * 60)
@@ -428,11 +427,10 @@ def format_job_data(job_data: dict) -> str:
 
 if __name__ == "__main__":
     url = input("Enter job URL: ")
-    print("\n🔍 Scraping job posting...\n")
+    print("\nScraping job posting...\n")
     
     job_data = scrape_job_posting(url)
     print(format_job_data(job_data))
     
-    # Also output as JSON for programmatic use
-    print("\n📊 RAW JSON DATA:")
+    print("\nRAW JSON DATA:")
     print(json.dumps(job_data, indent=2))

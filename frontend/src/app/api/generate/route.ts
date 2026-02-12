@@ -23,7 +23,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Forward the backend response body as-is so sections and all fields reach the client (avoids re-parse/size issues)
     const contentType = response.headers.get("content-type") || "application/json";
     const body = await response.text();
     return new NextResponse(body, {

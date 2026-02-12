@@ -21,8 +21,6 @@ function EditableBlock({
   const Tag = block ? "div" : "span";
   const ref = useRef<HTMLDivElement | HTMLSpanElement>(null);
 
-  // Sync value from props into DOM only when this block is not focused.
-  // While focused, React must not overwrite content or the cursor jumps to the start and typing appears backwards.
   useEffect(() => {
     const el = ref.current;
     if (!el || (document.activeElement && el.contains(document.activeElement))) return;
@@ -54,7 +52,6 @@ const RECOMPILE_DEBOUNCE_MS = 1500;
 
 export type LetterSections = Record<string, string>;
 
-/** Build viewer sections from /generate response (sections + explicit template fields). Uses explicit fields first so the viewer always matches the PDF. */
 function buildLetterSectionsFromGenerateResponse(data: {
   sections?: Record<string, string> | null;
   date?: string | null;
@@ -73,7 +70,6 @@ function buildLetterSectionsFromGenerateResponse(data: {
     typeof data.sections === "object" &&
     !Array.isArray(data.sections);
   const sections: Record<string, string> = (isSectionsObj ? data.sections : {}) as Record<string, string>;
-  // Start from explicit template fields (same as in PDF) so viewer always shows what’s in the PDF
   const base: LetterSections = {
     date: typeof data.date === "string" ? data.date : (sections.date ?? ""),
     greeting: typeof data.greeting === "string" ? data.greeting : (sections.greeting ?? ""),
@@ -84,7 +80,6 @@ function buildLetterSectionsFromGenerateResponse(data: {
     sincerely: typeof data.sincerely === "string" ? data.sincerely : (sections.sincerely ?? "Sincerely yours,"),
     signature: typeof data.signature === "string" ? data.signature : (sections.signature ?? ""),
   };
-  // Sender: from explicit sender_block or from sections
   if (typeof data.sender_block === "string" && data.sender_block.trim()) {
     const lines = data.sender_block.trim().split(/\n/).map((s) => s.trim()).filter(Boolean);
     base.sender_name = lines[0] ?? "";
@@ -94,13 +89,11 @@ function buildLetterSectionsFromGenerateResponse(data: {
     base.sender_name = sections.sender_name ?? "";
     base.sender_email = sections.sender_email ?? "";
   }
-  // Addressee: from explicit addressee_tex or from sections
   if (typeof data.addressee_tex === "string" && data.addressee_tex.trim()) {
     base.addressee = data.addressee_tex.trim();
   } else {
     base.addressee = sections.addressee ?? "";
   }
-  // Overlay any other keys from sections (e.g. company_name) so we don’t drop anything
   for (const [k, v] of Object.entries(sections)) {
     if (typeof v === "string" && base[k] === undefined) base[k] = v;
   }
@@ -234,21 +227,10 @@ export default function Home() {
       }
 
       const data = await response.json();
-      const logPayload: Record<string, unknown> = {};
-      for (const key of Object.keys(data)) {
-        if (key === "pdf" && typeof data.pdf === "string") {
-          logPayload[key] = `[base64 length: ${data.pdf.length}]`;
-        } else {
-          logPayload[key] = data[key];
-        }
-      }
-      console.log("[Tailored] Generate response (full):", logPayload);
-
       const pdfBlob = base64ToBlob(data.pdf, "application/pdf");
       const url = URL.createObjectURL(pdfBlob);
       previousPdfUrlRef.current = url;
       setPdfUrl(url);
-      // Build viewer state from full response: sections + explicit template fields so the editable viewer always has everything
       const sections: LetterSections = buildLetterSectionsFromGenerateResponse(data);
       const hasContent =
         (sections.intro?.trim() ?? "") !== "" ||
@@ -271,7 +253,7 @@ export default function Home() {
       lastCompiledRef.current = snapshot;
       setLastCompiledSnapshot(snapshot);
       setLastCompiledLogoSignature(getLogoSignature(logoFile));
-      setShowPdf(true); // open the letter pane so PDF content is displayed and editable right away
+      setShowPdf(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -353,7 +335,7 @@ export default function Home() {
     currentSectionsSnapshot === lastCompiledSnapshot &&
     logoSignatureMatches(logoFile, lastCompiledLogoSignature);
 
-  const [leftPanePercent, setLeftPanePercent] = useState(50); // default 50/50 split
+  const [leftPanePercent, setLeftPanePercent] = useState(50);
   const splitRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
 
@@ -408,7 +390,6 @@ export default function Home() {
           : undefined
       }
     >
-      {/* Left pane: form + actions */}
       <div
         className={`min-h-screen overflow-auto w-full ${
           hasPdf && showPdf
@@ -421,7 +402,6 @@ export default function Home() {
             Tailored
           </h1>
 
-          {/* Job Input */}
           <div className="mb-6">
             <label className="block mb-2 font-medium">Job Posting</label>
             <div className="flex gap-2 mb-2">
@@ -488,7 +468,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* Resume Upload */}
           <div className="mb-6">
             <label className="block mb-2 font-medium">Resume (PDF)</label>
             <input
@@ -507,7 +486,6 @@ export default function Home() {
             </button>
           </div>
 
-          {/* School Logo Upload */}
           <div className="mb-6">
             <label className="block mb-2 font-medium">
               School Logo (UWaterloo default)
@@ -539,7 +517,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Generate Button */}
           <button
             onClick={handleGenerate}
             disabled={!isFormValid || isGenerating}
@@ -548,14 +525,12 @@ export default function Home() {
             {isGenerating ? "Generating..." : "Generate Cover Letter"}
           </button>
 
-          {/* Error Message */}
           {error && (
             <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-xl">
               {error}
             </div>
           )}
 
-          {/* PDF Result actions */}
           {pdfUrl && (
             <div className="mt-6 flex flex-wrap gap-2">
               <button
@@ -574,7 +549,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* GitHub Link */}
           <div className="mt-10 flex justify-start">
             <a
               href="https://github.com/Blynkosaur/Tailored"
@@ -589,7 +563,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Mobile-only: editable viewer popup */}
       {hasPdf && showPdf && letterSections && (
         <div
           className="fixed inset-0 z-50 flex flex-col bg-background lg:hidden h-[100dvh] max-h-[100dvh] overflow-hidden"
@@ -745,7 +718,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Resize handle (only when split is open, hidden on mobile/tablet) */}
       {hasPdf && showPdf && letterSections && (
         <div
           data-resize-handle
@@ -756,7 +728,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Right pane: HTML letter (editable) — desktop only (lg+) */}
       {hasPdf && letterSections && (
         <div
           className={`flex flex-col border-l border-border bg-muted/30 overflow-hidden transition-all duration-300 ease-out shrink-0 min-h-0 ${
@@ -807,7 +778,6 @@ export default function Home() {
                 )}
               </div>
             </div>
-            {/* Ghost overlay: HTML/CSS letter that looks like the PDF */}
             <div className="flex-1 min-h-0 p-6 overflow-auto">
               <article
                 className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-[11pt] leading-relaxed"
