@@ -618,7 +618,7 @@ export default function Home() {
           </div>
           <div className="flex-1 min-h-0 min-w-0 p-6 overflow-auto overflow-x-hidden overscroll-contain">
             <article
-              className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-[11pt] leading-relaxed"
+              className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed"
               style={{ boxShadow: "var(--shadow-pdf, 0 0 20px rgba(0,0,0,0.1))" }}
             >
               <div className="mb-4">
@@ -780,7 +780,7 @@ export default function Home() {
             </div>
             <div className="flex-1 min-h-0 p-6 overflow-auto">
               <article
-                className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-[11pt] leading-relaxed"
+                className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed"
                 style={{ boxShadow: "var(--shadow-pdf, 0 0 20px rgba(0,0,0,0.1))" }}
               >
                 <div className="mb-4">
