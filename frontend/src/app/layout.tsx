@@ -1,23 +1,18 @@
 import type { Metadata } from "next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Inconsolata, Shizuru, Coming_Soon } from "next/font/google";
+import { Playfair_Display, Roboto } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
-const inconsolata = Inconsolata({
-  variable: "--font-inconsolata",
+const playfairDisplay = Playfair_Display({
+  variable: "--font-playfair-display",
+  weight: "700",
   subsets: ["latin"],
 });
 
-const shizuru = Shizuru({
-  variable: "--font-shizuru",
-  weight: "400",
-  subsets: ["latin"],
-});
-
-const comingSoon = Coming_Soon({
-  variable: "--font-coming-soon",
-  weight: "400",
+const roboto = Roboto({
+  variable: "--font-roboto",
+  weight: "300",
   subsets: ["latin"],
 });
 
@@ -34,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inconsolata.variable} ${shizuru.variable} ${comingSoon.variable} antialiased font-sans`}
+        className={`${playfairDisplay.variable} ${roboto.variable} antialiased font-sans`}
       >
         <main>{children}</main>
         <SpeedInsights />

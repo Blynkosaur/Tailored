@@ -398,7 +398,7 @@ export default function Home() {
         }`}
       >
         <div className="max-w-xl mx-auto p-8 flex flex-col">
-          <h1 className="text-4xl font-bold mb-6 font-[family-name:var(--font-shizuru)]">
+          <h1 className="text-4xl font-bold mb-6 font-title tracking-tight">
             Tailored
           </h1>
 
