@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { Download, Github, RefreshCw, Star, X } from "lucide-react";
 
 type InputMode = "url" | "text" | "pdf";
@@ -238,7 +239,7 @@ export default function Home() {
         (sections.addressee?.trim() ?? "") !== "";
       if (!hasContent) {
         console.warn(
-          "[Tailored] No section content. Expected response keys: pdf, sections, date, intro, body_1, etc. Run backend locally: cd backend && uvicorn api:app --reload (and ensure API_URL is http://localhost:8000 or unset)"
+          "300"
         );
       }
       if (!hasContent) {
@@ -398,7 +399,15 @@ export default function Home() {
         }`}
       >
         <div className="max-w-xl mx-auto p-8 flex flex-col">
-          <h1 className="text-4xl font-bold mb-6 font-title tracking-tight">
+          <h1 className="flex items-center gap-0 text-4xl font-bold mb-6 font-title tracking-tight -ml-2">
+            <Image 
+              src="/bobbypin.svg"
+              alt=""
+              width={36}
+              height={36}
+              unoptimized
+              className="shrink-0 h-[0.75em] w-auto rounded-sm -rotate-120 -scale-x-100 translate-y-0.5"
+            />
             Tailored
           </h1>
 

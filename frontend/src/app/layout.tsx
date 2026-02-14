@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Playfair_Display, Roboto } from "next/font/google";
+import { Playfair_Display, Oswald } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -10,8 +10,8 @@ const playfairDisplay = Playfair_Display({
   subsets: ["latin"],
 });
 
-const roboto = Roboto({
-  variable: "--font-roboto",
+const oswald = Oswald({
+  variable: "--font-oswald",
   weight: "300",
   subsets: ["latin"],
 });
@@ -29,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${playfairDisplay.variable} ${roboto.variable} antialiased font-sans`}
+        className={`${playfairDisplay.variable} ${oswald.variable} antialiased font-sans`}
       >
         <main>{children}</main>
         <SpeedInsights />
