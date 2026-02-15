@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Download, Github, RefreshCw, Star, X } from "lucide-react";
 
@@ -102,9 +103,18 @@ function buildLetterSectionsFromGenerateResponse(data: {
 }
 
 export default function Home() {
+  const searchParams = useSearchParams();
   const [inputMode, setInputMode] = useState<InputMode>("url");
   const [jobUrl, setJobUrl] = useState("");
   const [jobDescription, setJobDescription] = useState("");
+
+  useEffect(() => {
+    const url = searchParams.get("url");
+    if (url && typeof url === "string") {
+      setJobUrl(url);
+      setInputMode("url");
+    }
+  }, [searchParams]);
   const [jobPdfFile, setJobPdfFile] = useState<File | null>(null);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -399,14 +409,14 @@ export default function Home() {
         }`}
       >
         <div className="max-w-xl mx-auto p-8 flex flex-col">
-          <h1 className="flex items-center gap-0 text-4xl font-bold mb-6 font-title tracking-tight -ml-2">
+          <h1 className="flex items-center gap-0 text-4xl font-bold mb-6 font-title tracking-tight -ml-2 italic">
             <Image 
               src="/bobbypin.svg"
               alt=""
               width={36}
               height={36}
               unoptimized
-              className="shrink-0 h-[0.75em] w-auto rounded-sm -rotate-120 -scale-x-100 translate-y-0.5"
+              className="shrink-0 h-[0.75em] w-auto rounded-sm -rotate-100 -scale-x-100 translate-y-0.5"
             />
             Tailored
           </h1>
@@ -416,7 +426,7 @@ export default function Home() {
             <div className="flex gap-2 mb-2">
               <button
                 onClick={() => setInputMode("url")}
-                className={`px-3 py-1 border rounded-full transition-all cursor-pointer shadow-sm ${
+                className={`px-3 py-1 border rounded-full transition-all cursor-pointer ${
                   inputMode === "url" ? "bg-black text-white" : "hover:bg-gray-100 hover:font-bold"
                 }`}
               >
@@ -424,7 +434,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setInputMode("text")}
-                className={`px-3 py-1 border rounded-full transition-all cursor-pointer shadow-sm ${
+                className={`px-3 py-1 border rounded-full transition-all cursor-pointer ${
                   inputMode === "text" ? "bg-black text-white" : "hover:bg-gray-100 hover:font-bold"
                 }`}
               >
@@ -432,7 +442,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setInputMode("pdf")}
-                className={`px-3 py-1 border rounded-full transition-all cursor-pointer shadow-sm ${
+                className={`px-3 py-1 border rounded-full transition-all cursor-pointer ${
                   inputMode === "pdf" ? "bg-black text-white" : "hover:bg-gray-100 hover:font-bold"
                 }`}
               >
@@ -446,7 +456,7 @@ export default function Home() {
                 placeholder="https://jobs.example.com/..."
                 value={jobUrl}
                 onChange={(e) => setJobUrl(e.target.value)}
-                className="w-full p-2 border rounded-xl shadow-sm"
+                className="w-full p-2 border rounded-xl "
               />
             )}
             {inputMode === "text" && (
@@ -454,7 +464,7 @@ export default function Home() {
                 placeholder="Paste job description here..."
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
-                className="w-full p-2 border rounded-xl h-40 shadow-sm"
+                className="w-full p-2 border rounded-xl h-40 "
               />
             )}
             {inputMode === "pdf" && (
@@ -469,7 +479,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => document.getElementById("job-pdf-upload")?.click()}
-                  className="w-full p-2 border rounded-xl hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm text-left"
+                  className="w-full p-2 border rounded-xl hover:bg-gray-100 hover:font-bold transition-all cursor-pointer text-left"
                 >
                   {jobPdfFile ? jobPdfFile.name : "Upload Job Description PDF"}
                 </button>
@@ -489,7 +499,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => document.getElementById("resume-upload")?.click()}
-              className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm"
+              className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer "
             >
               {resumeFile ? resumeFile.name : "Upload Resume"}
             </button>
@@ -510,7 +520,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => document.getElementById("logo-upload")?.click()}
-                className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm"
+                className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer "
               >
                 {logoFile ? logoFile.name : "Upload Logo"}
               </button>
@@ -518,7 +528,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setLogoFile(null)}
-                  className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm"
+                  className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer "
                 >
                   Reset to UWaterloo
                 </button>
@@ -529,7 +539,7 @@ export default function Home() {
           <button
             onClick={handleGenerate}
             disabled={!isFormValid || isGenerating}
-            className="w-full p-3 bg-black text-white rounded-full hover:bg-gray-700 hover:font-bold transition-all cursor-pointer shadow-sm disabled:bg-gray-300 disabled:text-gray-500 disabled:hover:bg-gray-300 disabled:cursor-not-allowed"
+            className="w-full p-3 bg-black text-white rounded-full hover:bg-gray-800 hover:font-bold transition-all cursor-pointer disabled:bg-gray-300 disabled:text-gray-500 disabled:hover:bg-gray-300 disabled:cursor-not-allowed"
           >
             {isGenerating ? "Generating..." : "Generate Cover Letter"}
           </button>
@@ -544,13 +554,13 @@ export default function Home() {
             <div className="mt-6 flex flex-wrap gap-2">
               <button
                 onClick={() => setShowPdf(!showPdf)}
-                className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm"
+                className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer "
               >
                 {showPdf ? "Hide Cover Letter" : "View Cover Letter"}
               </button>
               <button
                 onClick={handleDownload}
-                className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer shadow-sm flex items-center gap-2"
+                className="px-4 py-2 border rounded-full hover:bg-gray-100 hover:font-bold transition-all cursor-pointer flex items-center gap-2"
               >
                 <Download className="w-4 h-4" />
                 Download PDF
@@ -627,8 +637,7 @@ export default function Home() {
           </div>
           <div className="flex-1 min-h-0 min-w-0 p-6 overflow-auto overflow-x-hidden overscroll-contain">
             <article
-              className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed"
-              style={{ boxShadow: "var(--shadow-pdf, 0 0 20px rgba(0,0,0,0.1))" }}
+              className="mx-auto bg-white text-black border border-border rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed"
             >
               <div className="mb-4">
                 <img
@@ -789,8 +798,7 @@ export default function Home() {
             </div>
             <div className="flex-1 min-h-0 p-6 overflow-auto">
               <article
-                className="mx-auto bg-white text-black shadow-pdf rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed"
-                style={{ boxShadow: "var(--shadow-pdf, 0 0 20px rgba(0,0,0,0.1))" }}
+                className="mx-auto bg-white text-black border border-border rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed"
               >
                 <div className="mb-4">
                   <img
