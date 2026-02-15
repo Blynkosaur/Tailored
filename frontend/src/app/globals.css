@@ -126,7 +126,7 @@
 
 @layer base {
   html {
-    zoom: 1.1;
+    zoom: 1;
   }
   * {
     @apply border-border outline-ring/50;
