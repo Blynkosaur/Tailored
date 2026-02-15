@@ -568,12 +568,15 @@ function HomeContent() {
             </div>
           )}
 
-          <div className="mt-10 flex justify-start">
+          <div className="mt-10 flex items-center justify-between w-full">
+            <p className="text-sm text-muted-foreground">
+              © {new Date().getFullYear()} Tailored
+            </p>
             <a
               href="https://github.com/Blynkosaur/Tailored"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-gray-500 hover:text-gray-700 hover:font-bold transition-all font-medium"
+              className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 hover:font-bold transition-all font-medium"
             >
               <Github className="w-5 h-5" />
               <span>(star it <Star className="w-4 h-4 inline" />)</span>
