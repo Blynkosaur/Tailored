@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Download, Github, RefreshCw, Star, X } from "lucide-react";
@@ -102,7 +102,7 @@ function buildLetterSectionsFromGenerateResponse(data: {
   return base;
 }
 
-export default function Home() {
+function HomeContent() {
   const searchParams = useSearchParams();
   const [inputMode, setInputMode] = useState<InputMode>("url");
   const [jobUrl, setJobUrl] = useState("");
@@ -898,5 +898,13 @@ export default function Home() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={null}>
+      <HomeContent />
+    </Suspense>
   );
 }
