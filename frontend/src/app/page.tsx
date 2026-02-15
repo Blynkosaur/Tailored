@@ -751,7 +751,7 @@ function HomeContent() {
           className={`flex flex-col border-l border-border bg-muted/30 overflow-hidden transition-all duration-300 ease-out shrink-0 min-h-0 ${
             showPdf
               ? "opacity-100 w-full min-h-[50vh] hidden lg:flex lg:w-[calc(var(--right-pct)-4px)] lg:min-w-[280px] lg:min-h-0"
-              : "w-0 min-w-0 max-w-0 opacity-0"
+              : "hidden"
           }`}
         >
           <div className="flex flex-col flex-1 min-h-0">
