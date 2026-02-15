@@ -637,7 +637,7 @@ function HomeContent() {
           </div>
           <div className="flex-1 min-h-0 min-w-0 p-6 overflow-auto overflow-x-hidden overscroll-contain">
             <article
-              className="mx-auto bg-white text-black border border-border rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed"
+              className="mx-auto bg-white text-black border border-border rounded-lg max-w-[21cm] min-h-0 p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed"
             >
               <div className="mb-4">
                 <img
