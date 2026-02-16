@@ -4,103 +4,19 @@ import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Download, Github, RefreshCw, Star, X } from "lucide-react";
+import {
+  buildLetterSectionsFromGenerateResponse,
+  getChangedSections,
+  getSectionLabel,
+  type LetterSections,
+  type ChangedItem,
+} from "@/lib/letterSections";
+import { LetterSectionsEditor } from "@/components/LetterSectionsEditor";
+import { EditChatPopup } from "@/components/EditChatPopup";
 
 type InputMode = "url" | "text" | "pdf";
 
-function EditableBlock({
-  sectionKey,
-  value,
-  placeholder,
-  onEdit,
-  block = false,
-}: {
-  sectionKey: string;
-  value: string;
-  placeholder: string;
-  onEdit: (key: string, text: string) => void;
-  block?: boolean;
-}) {
-  const Tag = block ? "div" : "span";
-  const ref = useRef<HTMLDivElement | HTMLSpanElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || (document.activeElement && el.contains(document.activeElement))) return;
-    if (el.textContent !== value) {
-      el.textContent = value;
-    }
-  }, [value]);
-
-  return (
-    <Tag
-      ref={ref as React.Ref<HTMLDivElement>}
-      contentEditable
-      suppressContentEditableWarning
-      className="outline-none focus:ring-1 focus:ring-ring rounded px-0.5 min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground"
-      data-placeholder={placeholder}
-      onInput={(e) => {
-        const text = (e.target as HTMLElement).innerText ?? "";
-        onEdit(sectionKey, text);
-      }}
-      onBlur={(e) => {
-        const text = (e.target as HTMLElement).innerText ?? "";
-        onEdit(sectionKey, text);
-      }}
-    />
-  );
-}
-
 const RECOMPILE_DEBOUNCE_MS = 1500;
-
-export type LetterSections = Record<string, string>;
-
-function buildLetterSectionsFromGenerateResponse(data: {
-  sections?: Record<string, string> | null;
-  date?: string | null;
-  sender_block?: string | null;
-  addressee_tex?: string | null;
-  greeting?: string | null;
-  intro?: string | null;
-  body_1?: string | null;
-  body_2?: string | null;
-  closing?: string | null;
-  sincerely?: string | null;
-  signature?: string | null;
-}): LetterSections {
-  const isSectionsObj =
-    data.sections != null &&
-    typeof data.sections === "object" &&
-    !Array.isArray(data.sections);
-  const sections: Record<string, string> = (isSectionsObj ? data.sections : {}) as Record<string, string>;
-  const base: LetterSections = {
-    date: typeof data.date === "string" ? data.date : (sections.date ?? ""),
-    greeting: typeof data.greeting === "string" ? data.greeting : (sections.greeting ?? ""),
-    intro: typeof data.intro === "string" ? data.intro : (sections.intro ?? ""),
-    body_1: typeof data.body_1 === "string" ? data.body_1 : (sections.body_1 ?? ""),
-    body_2: typeof data.body_2 === "string" ? data.body_2 : (sections.body_2 ?? ""),
-    closing: typeof data.closing === "string" ? data.closing : (sections.closing ?? ""),
-    sincerely: typeof data.sincerely === "string" ? data.sincerely : (sections.sincerely ?? "Sincerely yours,"),
-    signature: typeof data.signature === "string" ? data.signature : (sections.signature ?? ""),
-  };
-  if (typeof data.sender_block === "string" && data.sender_block.trim()) {
-    const lines = data.sender_block.trim().split(/\n/).map((s) => s.trim()).filter(Boolean);
-    base.sender_name = lines[0] ?? "";
-    if (lines.length > 1) base.sender_email = lines.slice(1).join("\n");
-    else if (sections.sender_email !== undefined) base.sender_email = sections.sender_email;
-  } else {
-    base.sender_name = sections.sender_name ?? "";
-    base.sender_email = sections.sender_email ?? "";
-  }
-  if (typeof data.addressee_tex === "string" && data.addressee_tex.trim()) {
-    base.addressee = data.addressee_tex.trim();
-  } else {
-    base.addressee = sections.addressee ?? "";
-  }
-  for (const [k, v] of Object.entries(sections)) {
-    if (typeof v === "string" && base[k] === undefined) base[k] = v;
-  }
-  return base;
-}
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -132,6 +48,10 @@ function HomeContent() {
     size: number;
     lastModified: number;
   } | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [proposedSections, setProposedSections] = useState<LetterSections | null>(null);
+  const [isEditLoading, setIsEditLoading] = useState(false);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
 
   const getLogoSignature = useCallback((file: File | null) => {
@@ -243,10 +163,11 @@ function HomeContent() {
       previousPdfUrlRef.current = url;
       setPdfUrl(url);
       const sections: LetterSections = buildLetterSectionsFromGenerateResponse(data);
+      const bodyArr = Array.isArray(sections.body) ? sections.body : [];
       const hasContent =
-        (sections.intro?.trim() ?? "") !== "" ||
-        (sections.body_1?.trim() ?? "") !== "" ||
-        (sections.addressee?.trim() ?? "") !== "";
+        ((sections.intro as string)?.trim() ?? "") !== "" ||
+        bodyArr.some((p) => (p || "").trim() !== "") ||
+        ((sections.addressee as string)?.trim() ?? "") !== "";
       if (!hasContent) {
         console.warn(
           "300"
@@ -355,8 +276,135 @@ function HomeContent() {
   }, [showPdf]);
 
   const updateSection = useCallback((key: string, text: string) => {
-    setLetterSections((prev) => (prev ? { ...prev, [key]: text } : prev));
+    setLetterSections((prev) => {
+      if (!prev) return prev;
+      if (key.startsWith("body.")) {
+        const i = parseInt(key.slice(5), 10);
+        if (Number.isNaN(i) || i < 0) return prev;
+        const body = Array.isArray(prev.body) ? [...prev.body] : [""];
+        while (body.length <= i) body.push("");
+        body[i] = text;
+        return { ...prev, body };
+      }
+      return { ...prev, [key]: text };
+    });
   }, []);
+
+  const addBodyParagraph = useCallback((afterIndex: number) => {
+    setLetterSections((prev) => {
+      if (!prev) return prev;
+      const body = Array.isArray(prev.body) ? [...prev.body] : [""];
+      body.splice(afterIndex + 1, 0, "");
+      return { ...prev, body };
+    });
+  }, []);
+
+  const removeBodyParagraph = useCallback((index: number) => {
+    setLetterSections((prev) => {
+      if (!prev) return prev;
+      const body = Array.isArray(prev.body) ? [...prev.body] : [""];
+      if (body.length <= 1) return prev;
+      body.splice(index, 1);
+      return { ...prev, body };
+    });
+  }, []);
+
+  const sendEdit = useCallback(
+    async (instruction: string) => {
+      if (!letterSections || !instruction.trim()) return;
+      setIsEditLoading(true);
+      setChatMessages((prev) => prev.concat({ role: "user", content: instruction.trim() }));
+      try {
+        const res = await fetch("/api/edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instruction: instruction.trim(), sections: letterSections }),
+        });
+        if (!res.ok) {
+          const d = await res.json();
+          throw new Error(d.detail || "Edit failed");
+        }
+        const data = await res.json();
+        const proposed = data.sections as LetterSections;
+        setProposedSections(proposed);
+        const count = getChangedSections(letterSections, proposed).length;
+        setChatMessages((prev) =>
+          prev.concat({
+            role: "assistant",
+            content: count
+              ? `${count} proposed change(s) in the letter — review and accept or reject each one in the letter view.`
+              : "No changes suggested.",
+          })
+        );
+      } catch (e) {
+        setChatMessages((prev) =>
+          prev.concat({ role: "assistant", content: e instanceof Error ? e.message : "Edit failed." })
+        );
+      } finally {
+        setIsEditLoading(false);
+      }
+    },
+    [letterSections]
+  );
+
+  const acceptSection = useCallback(
+    (key: string, index?: number) => {
+      if (!letterSections || !proposedSections) return;
+      let next: LetterSections;
+      if (key === "body" && index !== undefined) {
+        const propBody = Array.isArray(proposedSections.body) ? [...proposedSections.body] : [];
+        const body = Array.isArray(letterSections.body) ? [...letterSections.body] : [];
+        while (body.length <= index) body.push("");
+        body[index] = propBody[index] ?? "";
+        next = { ...letterSections, body };
+      } else {
+        const val = proposedSections[key];
+        if (typeof val !== "string") return;
+        next = { ...letterSections, [key]: val };
+      }
+      setLetterSections(next);
+      if (getChangedSections(next, proposedSections).length === 0) setProposedSections(null);
+      setChatMessages((prev) =>
+        prev.concat({
+          role: "assistant",
+          content: `Accepted change to ${getSectionLabel(key, index)}.`,
+        })
+      );
+    },
+    [letterSections, proposedSections]
+  );
+
+  const acceptAll = useCallback(() => {
+    if (!proposedSections) return;
+    setLetterSections(proposedSections);
+    setProposedSections(null);
+    setChatMessages((prev) => prev.concat({ role: "assistant", content: "Accepted all changes." }));
+  }, [proposedSections]);
+
+  const rejectChanges = useCallback(() => {
+    setProposedSections(null);
+    setChatMessages((prev) => prev.concat({ role: "assistant", content: "Changes discarded." }));
+  }, []);
+
+  const rejectSection = useCallback(
+    (key: string, index?: number) => {
+      if (!proposedSections || !letterSections) return;
+      if (key === "body" && index !== undefined) {
+        const currentBody = Array.isArray(letterSections.body) ? [...letterSections.body] : [];
+        const proposedBody = Array.isArray(proposedSections.body) ? [...proposedSections.body] : [];
+        while (proposedBody.length <= index) proposedBody.push("");
+        proposedBody[index] = currentBody[index] ?? "";
+        setProposedSections({ ...proposedSections, body: proposedBody });
+      } else {
+        const currentVal = letterSections[key];
+        setProposedSections({ ...proposedSections, [key]: currentVal });
+      }
+      setChatMessages((prev) =>
+        prev.concat({ role: "assistant", content: `Rejected change to ${getSectionLabel(key, index)}.` })
+      );
+    },
+    [letterSections, proposedSections]
+  );
 
   useEffect(() => {
     if (!showPdf) return;
@@ -390,6 +438,9 @@ function HomeContent() {
       document.removeEventListener("mouseup", onUp);
     };
   }, [showPdf]);
+
+  const changedList: ChangedItem[] =
+    letterSections && proposedSections ? getChangedSections(letterSections, proposedSections) : [];
 
   return (
     <div
@@ -639,102 +690,16 @@ function HomeContent() {
             </div>
           </div>
           <div className="flex-1 min-h-0 min-w-0 p-6 overflow-auto overflow-x-hidden overscroll-contain">
-            <article
-              className="mx-auto bg-white text-black border border-border rounded-lg max-w-[21cm] min-h-0 p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed"
-            >
-              <div className="mb-4">
-                <img
-                  src={logoPreviewUrl ?? "/school.png"}
-                  alt="Logo"
-                  className="max-w-[40%] h-auto"
-                />
-              </div>
-              <div className="flex flex-col items-end gap-0.5 mb-4">
-                <EditableBlock
-                  sectionKey="date"
-                  value={letterSections.date ?? new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
-                  placeholder="Month Day, Year"
-                  onEdit={updateSection}
-                />
-                <EditableBlock
-                  sectionKey="sender_name"
-                  value={letterSections.sender_name ?? ""}
-                  placeholder="Your name"
-                  onEdit={updateSection}
-                />
-                {letterSections.sender_email != null && (
-                  <EditableBlock
-                    sectionKey="sender_email"
-                    value={letterSections.sender_email ?? ""}
-                    placeholder="your@email.com"
-                    onEdit={updateSection}
-                  />
-                )}
-              </div>
-              <div className="mb-4 whitespace-pre-line">
-                <EditableBlock
-                  sectionKey="addressee"
-                  value={letterSections.addressee ?? ""}
-                  placeholder="Hiring Manager\nTitle\nCompany\nAddress"
-                  onEdit={updateSection}
-                  block
-                />
-              </div>
-              <div className="mb-4">
-                <EditableBlock
-                  sectionKey="greeting"
-                  value={letterSections.greeting ?? ""}
-                  placeholder="Dear Hiring Manager,"
-                  onEdit={updateSection}
-                />
-              </div>
-              <div className="space-y-4 mb-4">
-                <EditableBlock
-                  sectionKey="intro"
-                  value={letterSections.intro ?? ""}
-                  placeholder="Opening paragraph…"
-                  onEdit={updateSection}
-                  block
-                />
-                <EditableBlock
-                  sectionKey="body_1"
-                  value={letterSections.body_1 ?? ""}
-                  placeholder="Second paragraph…"
-                  onEdit={updateSection}
-                  block
-                />
-                <EditableBlock
-                  sectionKey="body_2"
-                  value={letterSections.body_2 ?? ""}
-                  placeholder="Third paragraph…"
-                  onEdit={updateSection}
-                  block
-                />
-                <EditableBlock
-                  sectionKey="closing"
-                  value={letterSections.closing ?? ""}
-                  placeholder="Optional closing sentence…"
-                  onEdit={updateSection}
-                  block
-                />
-              </div>
-              <div className="mb-2">
-                <EditableBlock
-                  sectionKey="sincerely"
-                  value={letterSections.sincerely ?? "Sincerely yours,"}
-                  placeholder="Sincerely yours,"
-                  onEdit={updateSection}
-                />
-              </div>
-              <div className="mt-6">
-                <EditableBlock
-                  sectionKey="signature"
-                  value={letterSections.signature ?? ""}
-                  placeholder="Your name"
-                  onEdit={updateSection}
-                />
-              </div>
-            </article>
+            <LetterSectionsEditor
+              letterSections={letterSections}
+              changedList={changedList}
+              logoPreviewUrl={logoPreviewUrl}
+              onEdit={updateSection}
+              onAcceptSection={acceptSection}
+              onRejectSection={rejectSection}
+              onAddBodyParagraph={addBodyParagraph}
+              onRemoveBodyParagraph={removeBodyParagraph}
+            />
           </div>
         </div>
       )}
@@ -800,105 +765,32 @@ function HomeContent() {
               </div>
             </div>
             <div className="flex-1 min-h-0 p-6 overflow-auto">
-              <article
-                className="mx-auto bg-white text-black border border-border rounded-lg max-w-[21cm] min-h-[29.7cm] p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed"
-              >
-                <div className="mb-4">
-                  <img
-                    src={logoPreviewUrl ?? "/school.png"}
-                    alt="Logo"
-                    className="max-w-[40%] h-auto"
-                  />
-                </div>
-                <div className="flex flex-col items-end gap-0.5 mb-4">
-                  <EditableBlock
-                    sectionKey="date"
-                    value={letterSections.date ?? new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
-                    placeholder="Month Day, Year"
-                    onEdit={updateSection}
-                  />
-                  <EditableBlock
-                    sectionKey="sender_name"
-                    value={letterSections.sender_name ?? ""}
-                    placeholder="Your name"
-                    onEdit={updateSection}
-                  />
-                  {letterSections.sender_email != null && (
-                    <EditableBlock
-                      sectionKey="sender_email"
-                      value={letterSections.sender_email ?? ""}
-                      placeholder="your@email.com"
-                      onEdit={updateSection}
-                    />
-                  )}
-                </div>
-                <div className="mb-4 whitespace-pre-line">
-                  <EditableBlock
-                    sectionKey="addressee"
-                    value={letterSections.addressee ?? ""}
-                    placeholder="Hiring Manager\nTitle\nCompany\nAddress"
-                    onEdit={updateSection}
-                    block
-                  />
-                </div>
-                <div className="mb-4">
-                  <EditableBlock
-                    sectionKey="greeting"
-                    value={letterSections.greeting ?? ""}
-                    placeholder="Dear Hiring Manager,"
-                    onEdit={updateSection}
-                  />
-                </div>
-                <div className="space-y-4 mb-4">
-                  <EditableBlock
-                    sectionKey="intro"
-                    value={letterSections.intro ?? ""}
-                    placeholder="Opening paragraph…"
-                    onEdit={updateSection}
-                    block
-                  />
-                  <EditableBlock
-                    sectionKey="body_1"
-                    value={letterSections.body_1 ?? ""}
-                    placeholder="Second paragraph…"
-                    onEdit={updateSection}
-                    block
-                  />
-                  <EditableBlock
-                    sectionKey="body_2"
-                    value={letterSections.body_2 ?? ""}
-                    placeholder="Third paragraph…"
-                    onEdit={updateSection}
-                    block
-                  />
-                  <EditableBlock
-                    sectionKey="closing"
-                    value={letterSections.closing ?? ""}
-                    placeholder="Optional closing sentence…"
-                    onEdit={updateSection}
-                    block
-                  />
-                </div>
-                <div className="mb-2">
-                  <EditableBlock
-                    sectionKey="sincerely"
-                    value={letterSections.sincerely ?? "Sincerely yours,"}
-                    placeholder="Sincerely yours,"
-                    onEdit={updateSection}
-                  />
-                </div>
-                <div className="mt-6">
-                  <EditableBlock
-                    sectionKey="signature"
-                    value={letterSections.signature ?? ""}
-                    placeholder="Your name"
-                    onEdit={updateSection}
-                  />
-                </div>
-              </article>
+              <LetterSectionsEditor
+                letterSections={letterSections}
+                changedList={changedList}
+                logoPreviewUrl={logoPreviewUrl}
+                onEdit={updateSection}
+                onAcceptSection={acceptSection}
+                onRejectSection={rejectSection}
+                onAddBodyParagraph={addBodyParagraph}
+                onRemoveBodyParagraph={removeBodyParagraph}
+              />
             </div>
           </div>
         </div>
+      )}
+
+      {letterSections && (
+        <EditChatPopup
+          open={chatOpen}
+          onOpenChange={setChatOpen}
+          messages={chatMessages}
+          hasPendingChanges={!!(proposedSections && changedList.length > 0)}
+          onAcceptAll={acceptAll}
+          onRejectAll={rejectChanges}
+          onSendEdit={sendEdit}
+          isEditLoading={isEditLoading}
+        />
       )}
     </div>
   );
