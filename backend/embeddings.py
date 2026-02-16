@@ -148,3 +148,79 @@ def embed_and_store_letter(sections: dict) -> str | None:
     text = anonymize_letter_sections(sections)
     embedding = embed_text(text)
     return store_letter_template(text, embedding)
+
+
+def retrieve_similar_templates(query_text: str, top_k: int = 3) -> list[dict]:
+    """
+    Embed query_text, find top_k nearest templates by cosine similarity in RDS.
+    Returns list of {"id", "content", "role_type", "score"} (score = cosine distance, lower is better).
+    """
+    if not is_rds_configured() or not (query_text or "").strip():
+        return []
+    init_templates_table()
+    query_embedding = embed_text((query_text or "").strip()[:8000])
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # pgvector: <=> is cosine distance (0 = same, 2 = opposite)
+            cur.execute(
+                """
+                SELECT id, content, role_type,
+                       (embedding <=> %s::vector) AS score
+                FROM templates
+                WHERE embedding IS NOT NULL AND content IS NOT NULL
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s
+                """,
+                (Vector(query_embedding), Vector(query_embedding), top_k),
+            )
+            rows = cur.fetchall()
+    return [
+        {"id": r[0], "content": r[1] or "", "role_type": r[2], "score": float(r[3])}
+        for r in rows
+    ]
+
+
+# --- Prompt & template injectors for extra-tailored generation/edit ---
+
+TEMPLATE_INJECTION_PROMPT = (
+    "Use the following similar past letters only for structure, tone, and phrasing inspiration. "
+    "Do not copy placeholders ([DATE], [SENDER], etc.) or specific content; tailor everything to the candidate and job below."
+)
+
+
+def build_template_injection(templates: list[dict], max_chars_total: int = 4000) -> str:
+    """Format retrieved templates into a single block for prompt injection."""
+    if not templates:
+        return ""
+    parts = []
+    remaining = max_chars_total
+    for i, t in enumerate(templates, 1):
+        content = (t.get("content") or "").strip()
+        if not content or remaining <= 0:
+            continue
+        chunk = content[:remaining]
+        if len(content) > remaining:
+            chunk = chunk[: chunk.rfind(" ")] if " " in chunk else chunk
+        parts.append(f"--- Similar letter {i} ---\n{chunk}")
+        remaining -= len(chunk)
+    if not parts:
+        return ""
+    return "\n\n=== SIMILAR PAST LETTERS (for style/structure inspiration only) ===\n" + "\n\n".join(parts) + "\n=== END ===\n\n"
+
+
+def inject_templates_into_prompt(
+    base_prompt: str,
+    query_for_retrieval: str,
+    top_k: int = 3,
+    instruction: str = TEMPLATE_INJECTION_PROMPT,
+) -> str:
+    """
+    Retrieve similar templates from RDS, build injection block, and prepend instruction + block to base_prompt.
+    """
+    templates = retrieve_similar_templates(query_for_retrieval, top_k=top_k)
+    if not templates:
+        return base_prompt
+    block = build_template_injection(templates)
+    if not block:
+        return base_prompt
+    return instruction.strip() + "\n\n" + block + base_prompt

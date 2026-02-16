@@ -12,6 +12,7 @@ from google import genai
 
 from resume_parser import parse_resume
 from scraper import scrape_job_posting, format_job_data
+from embeddings import inject_templates_into_prompt
 
 
 # Load environment variables from .env file
@@ -377,6 +378,13 @@ Description: {company_info.get('description', 'Not available')}
 
     user_message = company_context + "\nOutput the cover letter as JSON with keys: addressee, greeting, intro, body (array of exactly 2 paragraph strings), closing, signature. Write slightly more detailed intro and body paragraphs—name specific technologies and projects from the resume where relevant. Remember: do not say anything that is not explicitly in the RESUME section above."
 
+    # Template injector: retrieve similar past letters from RDS and inject for extra tailoring
+    user_message = inject_templates_into_prompt(
+        user_message,
+        query_for_retrieval=job_description[:3000],
+        top_k=3,
+    )
+
     response = client.models.generate_content(
         model="gemini-2.0-flash",
         contents=user_message,
@@ -507,6 +515,16 @@ def edit_letter_by_instruction(
 {resume_block}{history_block}User edit instruction: {instruction}
 
 Apply the instruction and output the revised sections as a JSON object with keys: addressee, greeting, intro, body (array of strings), closing, signature. Only use facts from the resume above; do not invent any details. If you cannot help with this request, return the same sections unchanged."""
+
+    # Template injector: retrieve similar letters for style/structure when editing
+    body_list = current.get("body") or []
+    first_body = (body_list[0] if isinstance(body_list, list) and body_list else "") or ""
+    edit_query = f"{current.get('intro') or ''} {first_body} {instruction}"
+    user_message = inject_templates_into_prompt(
+        user_message,
+        query_for_retrieval=edit_query[:2000],
+        top_k=2,
+    )
 
     response = client.models.generate_content(
         model="gemini-2.0-flash",
