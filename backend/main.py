@@ -12,7 +12,7 @@ from google import genai
 
 from resume_parser import parse_resume
 from scraper import scrape_job_posting, format_job_data
-from chains import invoke_generation, invoke_edit
+from chains import invoke_generation, invoke_edit, invoke_guardrail
 
 
 # Load environment variables from .env file
@@ -388,29 +388,9 @@ Description: {company_info.get('description', 'Not available')}
     return sections
 
 
-INAPPROPRIATE_GUARDRAIL_PROMPT = """You are a content guardrail. Reply with exactly one word: YES or NO.
-
-Reply NO only if the user message is inappropriate (offensive, harmful, harassing, or completely unrelated to editing a cover letter in this app—e.g. asking for weather, recipes, or other unrelated tasks). Be relaxed: if the message could reasonably be interpreted as a request about the cover letter or the letter content, reply YES. Vague or creative edit requests are fine.
-
-User message: """
-
-
 def is_cover_letter_related(instruction: str) -> bool:
-    """Return False only if the instruction is inappropriate; otherwise allow through."""
-    if not (instruction or "").strip():
-        return False
-    instruction = instruction.strip()[:500]
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=INAPPROPRIATE_GUARDRAIL_PROMPT + instruction,
-            config={"temperature": 0},
-        )
-        text = (response.text or "").strip().upper()
-        # NO = inappropriate, reject. YES or anything else = allow.
-        return not text.startswith("NO")
-    except Exception:
-        return True  # on error, allow the request through
+    """Return False only if the instruction is inappropriate; otherwise allow through. Uses LangChain guardrail chain."""
+    return invoke_guardrail(instruction)
 
 
 def edit_letter_by_instruction(

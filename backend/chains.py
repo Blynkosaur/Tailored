@@ -243,3 +243,40 @@ def invoke_edit(
         "instruction": instruction,
         "edit_query": edit_query,
     })
+
+
+# --- Guardrail chain ---
+
+GUARDRAIL_PROMPT = """You are a content guardrail. Reply with exactly one word: YES or NO.
+
+Reply NO only if the user message is inappropriate (offensive, harmful, harassing, or completely unrelated to editing a cover letter in this app—e.g. asking for weather, recipes, or other unrelated tasks). Be relaxed: if the message could reasonably be interpreted as a request about the cover letter or the letter content, reply YES. Vague or creative edit requests are fine.
+
+User message: {instruction}"""
+
+
+def get_guardrail_chain() -> RunnableSequence:
+    """Chain: instruction -> LLM -> YES/NO; used to reject inappropriate edit requests."""
+    prompt = ChatPromptTemplate.from_messages([("human", GUARDRAIL_PROMPT)])
+    llm = _get_llm(temperature=0)
+
+    def parse_guardrail(msg: Any) -> bool:
+        text = (getattr(msg, "content", str(msg)) or "").strip().upper()
+        # NO = inappropriate -> False; YES or anything else -> True (allow)
+        return not text.startswith("NO")
+
+    return prompt | llm | parse_guardrail
+
+
+def invoke_guardrail(instruction: str) -> bool:
+    """
+    Return False if the instruction is inappropriate (reject); True otherwise (allow).
+    On any error, returns True (allow through).
+    """
+    if not (instruction or "").strip():
+        return False
+    instruction = instruction.strip()[:500]
+    try:
+        chain = get_guardrail_chain()
+        return chain.invoke({"instruction": instruction})
+    except Exception:
+        return True
