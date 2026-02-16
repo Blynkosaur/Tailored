@@ -20,6 +20,7 @@ from main import (
     generate_cover_letter_latex,
     generate_cover_letter_sections,
     edit_letter_by_instruction,
+    is_cover_letter_related,
     format_job_for_prompt,
     COVER_LETTER_SYSTEM_PROMPT,
     JobInfoError,
@@ -317,7 +318,7 @@ async def generate_cover_letter(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         print(f"Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An error occurred.")
 
 
 @app.post("/compile", response_model=CompileResponse)
@@ -342,21 +343,28 @@ async def compile_sections(
         return CompileResponse(pdf=pdf_base64)
     except Exception as e:
         print(f"Compile error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An error occurred.")
 
 
 class LatexBody(BaseModel):
     sections: dict
 
 
+class ChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
 class EditRequest(BaseModel):
     instruction: str
     sections: dict
     resume_text: str | None = None  # parsed resume; edits must only use facts from this
+    chat_history: list[ChatMessage] | None = None  # last N messages for context
 
 
 class EditResponse(BaseModel):
     sections: dict
+    message: str | None = None  # when set, frontend shows this instead of proposed changes (e.g. off-topic guardrail)
 
 
 @app.post("/edit", response_model=EditResponse)
@@ -370,12 +378,21 @@ async def edit_letter(
     """
     try:
         loop = asyncio.get_event_loop()
+        is_related = await loop.run_in_executor(
+            executor,
+            is_cover_letter_related,
+            body.instruction,
+        )
+        if not is_related:
+            return EditResponse(sections=body.sections, message="I can't help you with that.")
+        history = [{"role": m.role, "content": m.content} for m in (body.chat_history or [])]
         proposed = await loop.run_in_executor(
             executor,
             edit_letter_by_instruction,
             body.sections,
             body.instruction,
             body.resume_text or "",
+            history,
         )
         return EditResponse(sections=proposed)
     except Exception as e:
