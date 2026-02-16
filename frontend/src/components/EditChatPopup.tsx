@@ -47,7 +47,9 @@ export function EditChatPopup({
       {open && (
         <div className="fixed bottom-20 right-6 z-50 flex w-[360px] max-h-[min(400px,70vh)] flex-col rounded-lg border border-border bg-background shadow-xl">
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="font-medium">Edit with AI</span>
+            <span className="font-medium">
+              {isEditLoading ? "Editing" : "Edit with AI"}
+            </span>
             <button
               type="button"
               onClick={() => onOpenChange(false)}

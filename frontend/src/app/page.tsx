@@ -13,6 +13,7 @@ import {
 } from "@/lib/letterSections";
 import { LetterSectionsEditor } from "@/components/LetterSectionsEditor";
 import { EditChatPopup } from "@/components/EditChatPopup";
+import { TypingDots } from "@/components/TypingDots";
 
 type InputMode = "url" | "text" | "pdf";
 
@@ -766,9 +767,16 @@ function HomeContent() {
           <button
             onClick={handleGenerate}
             disabled={!isFormValid || isGenerating}
-            className="w-full p-3 bg-black text-white rounded-full hover:bg-gray-800 hover:font-bold transition-all cursor-pointer disabled:bg-gray-300 disabled:text-gray-500 disabled:hover:bg-gray-300 disabled:cursor-not-allowed"
+            className="w-full p-3 bg-black text-white rounded-full hover:bg-gray-800 hover:font-bold transition-all cursor-pointer disabled:bg-gray-300 disabled:text-gray-500 disabled:hover:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
           >
-            {isGenerating ? "Generating..." : "Generate Cover Letter"}
+            {isGenerating ? (
+              <>
+                Generating
+                <TypingDots />
+              </>
+            ) : (
+              "Generate Cover Letter"
+            )}
           </button>
 
           {error && (
@@ -821,7 +829,10 @@ function HomeContent() {
           aria-label="Editing"
         >
           <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-background shrink-0 flex-shrink-0">
-            <h2 className="text-lg font-semibold">Editing</h2>
+            <h2 className="text-lg font-semibold flex items-center gap-1.5">
+              Editing
+              {isEditLoading && <TypingDots />}
+            </h2>
             <div className="flex items-center gap-2">
               {lastCompiledSnapshot != null && (
                 <span
@@ -900,7 +911,10 @@ function HomeContent() {
         >
           <div className="flex flex-col flex-1 min-h-0">
             <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-background shrink-0">
-              <h2 className="text-lg font-semibold">Editing</h2>
+              <h2 className="text-lg font-semibold flex items-center gap-1.5">
+                Editing
+                {isEditLoading && <TypingDots />}
+              </h2>
               <div className="flex items-center gap-3">
                 {letterSections != null && lastCompiledSnapshot != null && (
                   <span
