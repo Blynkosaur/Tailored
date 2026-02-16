@@ -19,6 +19,7 @@ from main import (
     get_company_info,
     generate_cover_letter_latex,
     generate_cover_letter_sections,
+    edit_letter_by_instruction,
     format_job_for_prompt,
     COVER_LETTER_SYSTEM_PROMPT,
     JobInfoError,
@@ -65,15 +66,13 @@ app.add_middleware(
 
 class GenerateResponse(BaseModel):
     pdf: str  # base64 encoded PDF
-    sections: dict  # tokenized sections for editable HTML view (sender_name, addressee, greeting, intro, body_1, body_2, closing, signature)
-    # All template fields (same names as in cover_letter_template.tex)
+    sections: dict  # tokenized sections; body is list[str] for variable-length paragraphs
     date: str = ""
     sender_block: str = ""
     addressee_tex: str = ""
     greeting: str = ""
     intro: str = ""
-    body_1: str = ""
-    body_2: str = ""
+    body: list[str] = []  # variable-length body paragraphs
     closing: str = ""
     sincerely: str = ""
     signature: str = ""
@@ -102,6 +101,21 @@ def _escape_latex(s: str) -> str:
     return s
 
 
+def _normalize_body(sections: dict) -> list[str]:
+    """Get body as list of paragraphs from sections (body array or legacy body_1/body_2)."""
+    body = sections.get("body")
+    if isinstance(body, list):
+        return [str(p).strip() for p in body if p]
+    b1 = sections.get("body_1") or ""
+    b2 = sections.get("body_2") or ""
+    out = []
+    if (b1 or "").strip():
+        out.append(b1.strip())
+    if (b2 or "").strip():
+        out.append(b2.strip())
+    return out
+
+
 def _sections_to_template_fields(sections: dict) -> dict:
     """Build template-shaped fields from sections (plain text, no LaTeX escaping). For API response."""
     sender_name = (sections.get("sender_name") or "").strip()
@@ -112,6 +126,7 @@ def _sections_to_template_fields(sections: dict) -> dict:
 
     addressee = sections.get("addressee") or ""
     addressee_tex = "\n".join(line.strip() for line in addressee.split("\n") if line.strip())
+    body_list = _normalize_body(sections)
 
     return {
         "date": sections.get("date") or "",
@@ -119,8 +134,7 @@ def _sections_to_template_fields(sections: dict) -> dict:
         "addressee_tex": addressee_tex,
         "greeting": sections.get("greeting") or "",
         "intro": sections.get("intro") or "",
-        "body_1": sections.get("body_1") or "",
-        "body_2": sections.get("body_2") or "",
+        "body": body_list,
         "closing": sections.get("closing") or "",
         "sincerely": sections.get("sincerely") or "Sincerely yours,",
         "signature": sections.get("signature") or "",
@@ -128,7 +142,7 @@ def _sections_to_template_fields(sections: dict) -> dict:
 
 
 def build_tex_from_sections(sections: dict) -> str:
-    """Inject section tokens into the cover letter template. Sections dict has sender_name, sender_email, addressee, greeting, intro, body_1, body_2, closing, signature."""
+    """Inject section tokens into the cover letter template. body is a list of paragraphs (or legacy body_1/body_2)."""
     sender_name = _escape_latex(sections.get("sender_name") or "")
     sender_email = _escape_latex(sections.get("sender_email") or "")
     sender_block = sender_name
@@ -138,14 +152,16 @@ def build_tex_from_sections(sections: dict) -> str:
     addressee = sections.get("addressee") or ""
     addressee_tex = " \\\\\n  ".join(_escape_latex(line) for line in addressee.split("\n") if line.strip())
 
+    body_list = _normalize_body(sections)
+    body_tex = "\n\n\\bigskip\n\n".join(_escape_latex(p) for p in body_list) if body_list else ""
+
     replacements = {
         "sender_block": sender_block,
         "addressee_tex": addressee_tex or " ",
         "date": _escape_latex(sections.get("date") or ""),
         "greeting": _escape_latex(sections.get("greeting") or ""),
         "intro": _escape_latex(sections.get("intro") or ""),
-        "body_1": _escape_latex(sections.get("body_1") or ""),
-        "body_2": _escape_latex(sections.get("body_2") or ""),
+        "body": body_tex,
         "closing": _escape_latex(sections.get("closing") or ""),
         "sincerely": _escape_latex(sections.get("sincerely") or "Sincerely yours,"),
         "signature": _escape_latex(sections.get("signature") or ""),
@@ -288,8 +304,7 @@ async def generate_cover_letter(
             addressee_tex=fields["addressee_tex"],
             greeting=fields["greeting"],
             intro=fields["intro"],
-            body_1=fields["body_1"],
-            body_2=fields["body_2"],
+            body=fields["body"],
             closing=fields["closing"],
             sincerely=fields["sincerely"],
             signature=fields["signature"],
@@ -330,6 +345,35 @@ async def compile_sections(
 
 class LatexBody(BaseModel):
     sections: dict
+
+
+class EditRequest(BaseModel):
+    instruction: str
+    sections: dict
+
+
+class EditResponse(BaseModel):
+    sections: dict
+
+
+@app.post("/edit", response_model=EditResponse)
+async def edit_letter(
+    body: EditRequest,
+    _: HTTPAuthorizationCredentials = Depends(verify_token),
+):
+    """
+    Propose revised cover letter sections from a natural-language instruction.
+    Returns proposed sections; frontend shows diff and lets user accept/reject.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        proposed = await loop.run_in_executor(
+            executor, edit_letter_by_instruction, body.sections, body.instruction
+        )
+        return EditResponse(sections=proposed)
+    except Exception as e:
+        print(f"Edit error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/latex", response_model=LatexResponse)
