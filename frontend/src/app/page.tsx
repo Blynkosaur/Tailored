@@ -18,11 +18,59 @@ type InputMode = "url" | "text" | "pdf";
 
 const RECOMPILE_DEBOUNCE_MS = 1500;
 
+const SESSION_KEYS = {
+  letterSections: "tailored_letterSections",
+  chatMessages: "tailored_chatMessages",
+  proposedSections: "tailored_proposedSections",
+  pdfBase64: "tailored_pdfBase64",
+  showPdf: "tailored_showPdf",
+  lastCompiledSnapshot: "tailored_lastCompiledSnapshot",
+  resumeText: "tailored_resumeText",
+  jobDescription: "tailored_jobDescription",
+  resume: "tailored_resume",
+  logo: "tailored_logo",
+} as const;
+
+type StoredFile = { base64: string; name: string; type: string };
+
+function fileToStoredFile(file: File): Promise<StoredFile> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl;
+      resolve({ base64, name: file.name, type: file.type });
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function storedFileToFile(stored: StoredFile): File {
+  const byteCharacters = atob(stored.base64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+  const blob = new Blob([new Uint8Array(byteNumbers)], { type: stored.type });
+  return new File([blob], stored.name, { type: stored.type });
+}
+
+function loadFromSession<T>(key: string, parse: (s: string) => T): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const s = sessionStorage.getItem(key);
+    return s ? parse(s) : null;
+  } catch {
+    return null;
+  }
+}
+
 function HomeContent() {
   const searchParams = useSearchParams();
   const [inputMode, setInputMode] = useState<InputMode>("url");
   const [jobUrl, setJobUrl] = useState("");
-  const [jobDescription, setJobDescription] = useState("");
+  const [jobDescription, setJobDescription] = useState(() =>
+    loadFromSession(SESSION_KEYS.jobDescription, (s) => s) ?? ""
+  );
 
   useEffect(() => {
     const url = searchParams.get("url");
@@ -34,25 +82,141 @@ function HomeContent() {
   const [jobPdfFile, setJobPdfFile] = useState<File | null>(null);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const filesRestoredRef = useRef(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [showPdf, setShowPdf] = useState(false);
-  const [letterSections, setLetterSections] = useState<LetterSections | null>(null);
+  const [showPdf, setShowPdf] = useState(() => {
+    const v = loadFromSession(SESSION_KEYS.showPdf, (s) => s === "true");
+    return v ?? false;
+  });
+  const [letterSections, setLetterSections] = useState<LetterSections | null>(() =>
+    loadFromSession(SESSION_KEYS.letterSections, (s) => JSON.parse(s) as LetterSections)
+  );
   const [isCompiling, setIsCompiling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastCompiledRef = useRef<string | null>(null);
   const previousPdfUrlRef = useRef<string | null>(null);
-  const [lastCompiledSnapshot, setLastCompiledSnapshot] = useState<string | null>(null);
+  const [lastCompiledSnapshot, setLastCompiledSnapshot] = useState<string | null>(() =>
+    loadFromSession(SESSION_KEYS.lastCompiledSnapshot, (s) => s)
+  );
   const [lastCompiledLogoSignature, setLastCompiledLogoSignature] = useState<{
     name: string;
     size: number;
     lastModified: number;
   } | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
-  const [proposedSections, setProposedSections] = useState<LetterSections | null>(null);
+  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>(() =>
+    loadFromSession(SESSION_KEYS.chatMessages, (s) => JSON.parse(s) as { role: "user" | "assistant"; content: string }[]) ?? []
+  );
+  const [proposedSections, setProposedSections] = useState<LetterSections | null>(() =>
+    loadFromSession(SESSION_KEYS.proposedSections, (s) => JSON.parse(s) as LetterSections)
+  );
+  const [resumeText, setResumeText] = useState<string>(() =>
+    loadFromSession(SESSION_KEYS.resumeText, (s) => s) ?? ""
+  );
   const [isEditLoading, setIsEditLoading] = useState(false);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+
+  // Restore PDF, resume, logo from sessionStorage (run once)
+  useEffect(() => {
+    const snapshot = sessionStorage.getItem(SESSION_KEYS.lastCompiledSnapshot);
+    if (snapshot) lastCompiledRef.current = snapshot;
+
+    const storedPdf = sessionStorage.getItem(SESSION_KEYS.pdfBase64);
+    if (storedPdf) {
+      try {
+        const byteCharacters = atob(storedPdf);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+        const blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        previousPdfUrlRef.current = url;
+        setPdfUrl(url);
+      } catch (_) {}
+    }
+
+    if (filesRestoredRef.current) return;
+    filesRestoredRef.current = true;
+    try {
+      const resumeStored = sessionStorage.getItem(SESSION_KEYS.resume);
+      if (resumeStored) {
+        const parsed = JSON.parse(resumeStored) as StoredFile;
+        if (parsed?.base64 && parsed?.name && parsed?.type) setResumeFile(storedFileToFile(parsed));
+      }
+      const logoStored = sessionStorage.getItem(SESSION_KEYS.logo);
+      if (logoStored) {
+        const parsed = JSON.parse(logoStored) as StoredFile;
+        if (parsed?.base64 && parsed?.name && parsed?.type) setLogoFile(storedFileToFile(parsed));
+      }
+    } catch (_) {}
+  }, []);
+
+  // Persist letter and chat state to sessionStorage
+  useEffect(() => {
+    if (letterSections == null) {
+      sessionStorage.removeItem(SESSION_KEYS.letterSections);
+      sessionStorage.removeItem(SESSION_KEYS.chatMessages);
+      sessionStorage.removeItem(SESSION_KEYS.proposedSections);
+      sessionStorage.removeItem(SESSION_KEYS.pdfBase64);
+      sessionStorage.removeItem(SESSION_KEYS.showPdf);
+      sessionStorage.removeItem(SESSION_KEYS.lastCompiledSnapshot);
+      sessionStorage.removeItem(SESSION_KEYS.resumeText);
+      return;
+    }
+    try {
+      sessionStorage.setItem(SESSION_KEYS.letterSections, JSON.stringify(letterSections));
+      sessionStorage.setItem(SESSION_KEYS.chatMessages, JSON.stringify(chatMessages));
+      if (proposedSections) sessionStorage.setItem(SESSION_KEYS.proposedSections, JSON.stringify(proposedSections));
+      else sessionStorage.removeItem(SESSION_KEYS.proposedSections);
+      sessionStorage.setItem(SESSION_KEYS.showPdf, String(showPdf));
+      if (lastCompiledSnapshot) sessionStorage.setItem(SESSION_KEYS.lastCompiledSnapshot, lastCompiledSnapshot);
+      else sessionStorage.removeItem(SESSION_KEYS.lastCompiledSnapshot);
+      sessionStorage.setItem(SESSION_KEYS.resumeText, resumeText);
+    } catch (_) {}
+  }, [letterSections, chatMessages, proposedSections, showPdf, lastCompiledSnapshot, resumeText]);
+
+  // Persist job description
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SESSION_KEYS.jobDescription, jobDescription);
+    } catch (_) {}
+  }, [jobDescription]);
+
+  // Persist resume and logo when they change
+  useEffect(() => {
+    if (!resumeFile) {
+      sessionStorage.removeItem(SESSION_KEYS.resume);
+      return;
+    }
+    let cancelled = false;
+    fileToStoredFile(resumeFile).then((stored) => {
+      if (!cancelled) {
+        try {
+          sessionStorage.setItem(SESSION_KEYS.resume, JSON.stringify(stored));
+        } catch (_) {}
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeFile]);
+  useEffect(() => {
+    if (!logoFile) {
+      sessionStorage.removeItem(SESSION_KEYS.logo);
+      return;
+    }
+    let cancelled = false;
+    fileToStoredFile(logoFile).then((stored) => {
+      if (!cancelled) {
+        try {
+          sessionStorage.setItem(SESSION_KEYS.logo, JSON.stringify(stored));
+        } catch (_) {}
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [logoFile]);
 
   const getLogoSignature = useCallback((file: File | null) => {
     if (!file) return null;
@@ -127,6 +291,7 @@ function HomeContent() {
     setPdfUrl(null);
     setShowPdf(false);
     setLetterSections(null);
+    setResumeText("");
     lastCompiledRef.current = null;
     setLastCompiledSnapshot(null);
     setLastCompiledLogoSignature(null);
@@ -162,6 +327,10 @@ function HomeContent() {
       const url = URL.createObjectURL(pdfBlob);
       previousPdfUrlRef.current = url;
       setPdfUrl(url);
+      try {
+        sessionStorage.setItem(SESSION_KEYS.pdfBase64, data.pdf);
+      } catch (_) {}
+      if (typeof data.resume_text === "string") setResumeText(data.resume_text);
       const sections: LetterSections = buildLetterSectionsFromGenerateResponse(data);
       const bodyArr = Array.isArray(sections.body) ? sections.body : [];
       const hasContent =
@@ -230,6 +399,9 @@ function HomeContent() {
         if (previousPdfUrlRef.current) URL.revokeObjectURL(previousPdfUrlRef.current);
         previousPdfUrlRef.current = url;
         setPdfUrl(url);
+        try {
+          sessionStorage.setItem(SESSION_KEYS.pdfBase64, data.pdf);
+        } catch (_) {}
         const snapshot = JSON.stringify(sections);
         lastCompiledRef.current = snapshot;
         setLastCompiledSnapshot(snapshot);
@@ -318,7 +490,11 @@ function HomeContent() {
         const res = await fetch("/api/edit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ instruction: instruction.trim(), sections: letterSections }),
+          body: JSON.stringify({
+          instruction: instruction.trim(),
+          sections: letterSections,
+          resume_text: resumeText || undefined,
+        }),
         });
         if (!res.ok) {
           const d = await res.json();
@@ -344,7 +520,7 @@ function HomeContent() {
         setIsEditLoading(false);
       }
     },
-    [letterSections]
+    [letterSections, resumeText]
   );
 
   const acceptSection = useCallback(

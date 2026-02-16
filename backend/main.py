@@ -335,7 +335,9 @@ Given the candidate contact info, company research, resume, and job description 
 - "closing": string, optional short closing sentence before sign-off (can be empty string)
 - "signature": string, candidate full name only
 
-Rules: Use ONLY the contact info from CANDIDATE CONTACT INFO. Never add URLs, LinkedIn, GitHub. No placeholder text. If info is missing, omit or use "Hiring Manager" / leave line empty. Write complete professional sentences."""
+CRITICAL - Resume-only rule: Do NOT say anything that is not on the candidate's resume. Every company name, job title, project name, metric (e.g. percentages), technology, and experience you mention MUST appear explicitly in the RESUME section below. If a fact is not in the resume, do not write it. Do not infer, assume, or invent details. When in doubt, omit the claim or phrase it in general terms using only words that appear in the resume.
+
+Other rules: Use ONLY the contact info from CANDIDATE CONTACT INFO. Never add URLs, LinkedIn, GitHub. No placeholder text. If info is missing, omit or use "Hiring Manager" / leave line empty. Write complete professional sentences."""
 
 
 def generate_cover_letter_sections(resume_text: str, job_description: str) -> dict:
@@ -362,7 +364,7 @@ Company: {company_info.get('company_name', 'Unknown')}
 Description: {company_info.get('description', 'Not available')}
 === END ===
 
-=== RESUME (experience/skills only) ===
+=== RESUME (ONLY use facts that appear here; do not mention any company, project, or metric not listed) ===
 {resume_text[:6000]}
 === END ===
 
@@ -371,7 +373,7 @@ Description: {company_info.get('description', 'Not available')}
 === END ===
 """
 
-    user_message = company_context + "\nOutput the cover letter as JSON with keys: addressee, greeting, intro, body (array of exactly 2 paragraph strings), closing, signature."
+    user_message = company_context + "\nOutput the cover letter as JSON with keys: addressee, greeting, intro, body (array of exactly 2 paragraph strings), closing, signature. Remember: do not say anything that is not explicitly in the RESUME section above."
 
     response = client.models.generate_content(
         model="gemini-2.0-flash",
@@ -424,10 +426,11 @@ EDIT_BY_INSTRUCTION_PROMPT = """You are an expert editor. Given the current cove
 Output the same keys as the input: addressee, greeting, intro, body (array of paragraph strings), closing, signature.
 - Change only what the user asked to change; leave everything else identical.
 - Preserve the exact structure: if body had 2 paragraphs, output body with 2 paragraphs unless the instruction implies adding/removing paragraphs.
+- CRITICAL - Do not say anything that is not on the resume: Every company name, project name, metric (e.g. 26%), technology, and experience you write MUST appear explicitly in the CANDIDATE RESUME section. Do not invent, infer, or assume any details. If the user asks you to add something that is not in the resume, rephrase using only information from the resume or decline to add that specific claim.
 - No markdown, no code fences, no explanation. Output only the JSON object."""
 
 
-def edit_letter_by_instruction(sections: dict, instruction: str) -> dict:
+def edit_letter_by_instruction(sections: dict, instruction: str, resume_text: str = "") -> dict:
     """
     Propose revised cover letter sections based on user instruction.
     Returns full sections dict (proposed); frontend may diff and accept/reject.
@@ -448,10 +451,18 @@ def edit_letter_by_instruction(sections: dict, instruction: str) -> dict:
     }
     current_json = json.dumps(current, ensure_ascii=False, indent=2)
 
+    resume_block = ""
+    if resume_text and resume_text.strip():
+        resume_block = f"""
+=== CANDIDATE RESUME (only use facts from here; do not invent projects or details) ===
+{resume_text[:8000]}
+=== END ===
+
+"""
+
     user_message = f"""Current cover letter sections (JSON):
 {current_json}
-
-User edit instruction: {instruction}
+{resume_block}User edit instruction: {instruction}
 
 Output the revised sections as a JSON object with keys: addressee, greeting, intro, body (array of strings), closing, signature. Change only what the user asked; keep the rest identical."""
 

@@ -67,6 +67,7 @@ app.add_middleware(
 class GenerateResponse(BaseModel):
     pdf: str  # base64 encoded PDF
     sections: dict  # tokenized sections; body is list[str] for variable-length paragraphs
+    resume_text: str = ""  # parsed resume text for edit flow (ground edits in resume only)
     date: str = ""
     sender_block: str = ""
     addressee_tex: str = ""
@@ -299,6 +300,7 @@ async def generate_cover_letter(
         return GenerateResponse(
             pdf=pdf_base64,
             sections=sections,
+            resume_text=resume_text or "",
             date=fields["date"],
             sender_block=fields["sender_block"],
             addressee_tex=fields["addressee_tex"],
@@ -350,6 +352,7 @@ class LatexBody(BaseModel):
 class EditRequest(BaseModel):
     instruction: str
     sections: dict
+    resume_text: str | None = None  # parsed resume; edits must only use facts from this
 
 
 class EditResponse(BaseModel):
@@ -368,7 +371,11 @@ async def edit_letter(
     try:
         loop = asyncio.get_event_loop()
         proposed = await loop.run_in_executor(
-            executor, edit_letter_by_instruction, body.sections, body.instruction
+            executor,
+            edit_letter_by_instruction,
+            body.sections,
+            body.instruction,
+            body.resume_text or "",
         )
         return EditResponse(sections=proposed)
     except Exception as e:

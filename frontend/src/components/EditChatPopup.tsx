@@ -108,6 +108,7 @@ export function EditChatPopup({
               name="chat-input"
               type="text"
               placeholder="e.g. make the intro more formal"
+              autoComplete="off"
               className="flex-1 rounded border border-border px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
               disabled={isEditLoading}
             />
