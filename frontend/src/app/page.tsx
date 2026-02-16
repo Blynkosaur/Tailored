@@ -381,6 +381,13 @@ function HomeContent() {
       a.download = "cover_letter.pdf";
       a.click();
     }
+    if (letterSections) {
+      fetch("/api/embed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sections: letterSections }),
+      }).catch(() => {});
+    }
   };
 
   const recompile = useCallback(
