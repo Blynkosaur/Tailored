@@ -12,7 +12,7 @@ from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-import pdfplumber
+import pdfplumber  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 
 from main import (
@@ -52,6 +52,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://bry4n.co",
         "https://bry4n.co",
         "https://www.bry4n.co",
         "https://tailored.bry4n.co",
@@ -240,7 +241,7 @@ async def generate_cover_letter(
             status_code=400, detail="Provide only one of job_url, job_description, or job_pdf"
         )
 
-    if not resume.filename.lower().endswith(".pdf"):
+    if not (resume.filename or "").lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Resume must be a PDF file")
 
     try:
@@ -264,8 +265,9 @@ async def generate_cover_letter(
 
         print("Generating cover letter sections...")
         loop = asyncio.get_event_loop()
+        job_desc_str = job_desc if job_desc is not None else ""
         sections = await loop.run_in_executor(
-            executor, generate_cover_letter_sections, resume_text, job_desc
+            executor, generate_cover_letter_sections, resume_text, job_desc_str
         )
 
         print("Building LaTeX and compiling to PDF...")
