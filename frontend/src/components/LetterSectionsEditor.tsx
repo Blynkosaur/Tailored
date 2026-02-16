@@ -36,7 +36,7 @@ export function LetterSectionsEditor({
   const bodyLengthToShow = Math.max(body.length, maxBodyIndexFromChanges + 1);
 
   return (
-    <article className="mx-auto bg-white text-black border border-border rounded-lg max-w-[21cm] min-h-0 p-10 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed">
+    <article className="mx-auto bg-white text-black border border-border rounded-lg max-w-[21cm] min-h-0 p-10 pb-24 font-[family-name:theme(fontFamily.sans)] text-base md:text-[11pt] leading-relaxed">
       <div className="mb-4">
         <img
           src={logoPreviewUrl ?? "/school.png"}
@@ -175,7 +175,7 @@ export function LetterSectionsEditor({
           onEdit={onEdit}
         />
       </div>
-      <div className="mt-6">
+      <div className="mt-6 mb-16">
         <PendingDiffOrEdit
           changedList={changedList}
           sectionKey="signature"

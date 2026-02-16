@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Download, Github, RefreshCw, Star, X } from "lucide-react";
+import { CgMenuLeftAlt } from "react-icons/cg";
 import {
   buildLetterSectionsFromGenerateResponse,
   getChangedSections,
@@ -492,16 +493,23 @@ function HomeContent() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-          instruction: instruction.trim(),
-          sections: letterSections,
-          resume_text: resumeText || undefined,
-        }),
+            instruction: instruction.trim(),
+            sections: letterSections,
+            resume_text: resumeText || undefined,
+            chat_history: chatMessages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+          }),
         });
         if (!res.ok) {
           const d = await res.json();
           throw new Error(d.detail || "Edit failed");
         }
         const data = await res.json();
+        if (data.message) {
+          setChatMessages((prev) =>
+            prev.concat({ role: "assistant", content: data.message })
+          );
+          return;
+        }
         const proposed = data.sections as LetterSections;
         setProposedSections(proposed);
         const count = getChangedSections(letterSections, proposed).length;
@@ -510,7 +518,7 @@ function HomeContent() {
             role: "assistant",
             content: count
               ? `${count} proposed change(s) in the letter — review and accept or reject each one in the letter view.`
-              : "No changes suggested.",
+              : "Seems I can't help you with that, try being more specific.",
           })
         );
       } catch (e) {
@@ -521,7 +529,7 @@ function HomeContent() {
         setIsEditLoading(false);
       }
     },
-    [letterSections, resumeText]
+    [letterSections, resumeText, chatMessages]
   );
 
   const acceptSection = useCallback(
@@ -619,19 +627,22 @@ function HomeContent() {
   const changedList: ChangedItem[] =
     letterSections && proposedSections ? getChangedSections(letterSections, proposedSections) : [];
 
+  const editPaneOpen = hasPdf && showPdf && letterSections;
+  const [leftPaneHidden, setLeftPaneHidden] = useState(false);
+
   return (
     <div
       ref={splitRef}
       className="flex min-h-screen w-full transition-[background] duration-300 flex-col lg:flex-row lg:h-screen lg:overflow-hidden"
       style={
-        hasPdf && showPdf
+        hasPdf && showPdf && !leftPaneHidden
           ? ({ "--left-pct": `${leftPanePercent}%`, "--right-pct": `${100 - leftPanePercent}%` } as React.CSSProperties)
           : undefined
       }
     >
       <div
-        className={`min-h-screen overflow-auto w-full ${
-          hasPdf && showPdf
+        className={`min-h-screen overflow-auto w-full transition-all duration-200 ${
+          leftPaneHidden ? "hidden" : hasPdf && showPdf
             ? "lg:shrink-0 lg:min-w-[280px] lg:max-w-[calc(80%-8px)] lg:w-[calc(var(--left-pct)-4px)]"
             : "lg:w-full"
         }`}
@@ -829,11 +840,22 @@ function HomeContent() {
           aria-label="Editing"
         >
           <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-background shrink-0 flex-shrink-0">
-            <h2 className="text-lg font-semibold flex items-center gap-1.5">
-              Editing
-              {isEditLoading && <TypingDots />}
-            </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={() => setShowPdf(false)}
+                className="shrink-0 flex h-8 w-8 items-center justify-center rounded-md bg-transparent hover:bg-muted transition-colors lg:hidden"
+                title="Back to form"
+                aria-label="Back to form"
+              >
+                <CgMenuLeftAlt className="h-4 w-4" />
+              </button>
+              <h2 className="text-lg font-semibold flex items-center gap-1.5 truncate">
+                Editing
+                {isEditLoading && <TypingDots />}
+              </h2>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               {lastCompiledSnapshot != null && (
                 <span
                   className={`flex items-center gap-1.5 text-sm font-medium ${
@@ -891,7 +913,7 @@ function HomeContent() {
         </div>
       )}
 
-      {hasPdf && showPdf && letterSections && (
+      {hasPdf && showPdf && letterSections && !leftPaneHidden && (
         <div
           data-resize-handle
           className="hidden lg:flex shrink-0 w-2 cursor-col-resize border-l border-r border-border bg-muted/50 hover:bg-muted transition-colors items-center justify-center group"
@@ -903,19 +925,32 @@ function HomeContent() {
 
       {hasPdf && letterSections && (
         <div
-          className={`flex flex-col border-l border-border bg-muted/30 overflow-hidden transition-all duration-300 ease-out shrink-0 min-h-0 ${
+          className={`flex flex-col border-l border-border bg-muted/30 overflow-hidden transition-all duration-300 ease-out min-h-0 ${
             showPdf
-              ? "opacity-100 w-full min-h-[50vh] hidden lg:flex lg:w-[calc(var(--right-pct)-4px)] lg:min-w-[280px] lg:min-h-0"
+              ? leftPaneHidden
+                ? "opacity-100 w-full min-h-[50vh] flex-1 min-w-0 lg:flex lg:min-h-0"
+                : "opacity-100 w-full min-h-[50vh] hidden lg:flex lg:shrink-0 lg:w-[calc(var(--right-pct)-4px)] lg:min-w-[280px] lg:min-h-0"
               : "hidden"
           }`}
         >
           <div className="flex flex-col flex-1 min-h-0">
             <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-background shrink-0">
-              <h2 className="text-lg font-semibold flex items-center gap-1.5">
-                Editing
-                {isEditLoading && <TypingDots />}
-              </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setLeftPaneHidden((h) => !h)}
+                  className="hidden lg:flex shrink-0 h-8 w-8 items-center justify-center rounded-md bg-transparent hover:bg-muted transition-colors"
+                  title={leftPaneHidden ? "Show form" : "Hide form"}
+                  aria-label={leftPaneHidden ? "Show form" : "Hide form"}
+                >
+                  <CgMenuLeftAlt className="h-4 w-4" />
+                </button>
+                <h2 className="text-lg font-semibold flex items-center gap-1.5 truncate">
+                  Editing
+                  {isEditLoading && <TypingDots />}
+                </h2>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
                 {letterSections != null && lastCompiledSnapshot != null && (
                   <span
                     className={`flex items-center gap-1.5 text-sm font-medium ${
@@ -970,7 +1005,7 @@ function HomeContent() {
         </div>
       )}
 
-      {letterSections && (
+      {letterSections && showPdf && (
         <EditChatPopup
           open={chatOpen}
           onOpenChange={setChatOpen}
