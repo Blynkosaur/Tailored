@@ -330,13 +330,16 @@ Given the candidate contact info, company research, resume, and job description 
 
 - "addressee": string with 4 lines separated by newline (\\n): line1 = hiring manager name or "Hiring Manager", line2 = job title or "Recruitment Team", line3 = company name, line4 = company address (or empty line if unknown)
 - "greeting": string, e.g. "Dear Hiring Manager," or "Dear Ms. Smith,"
-- "intro": string, first paragraph (opening: state position, enthusiasm, company knowledge)
-- "body_1": string, second paragraph (match qualifications to job, specific examples)
-- "body_2": string, third paragraph (closing: reiterate interest, thank reader)
+- "intro": string, first paragraph (opening: state position, enthusiasm, and 1–2 specific points about the company or role; write 3–4 substantive sentences)
+- "body": array of exactly 2 strings (two body paragraphs: first = match qualifications to job with specific examples from the resume—name technologies, projects, and outcomes where relevant; second = add another concrete example or two, then reiterate interest and thank reader; aim for 4–5 sentences per paragraph)
 - "closing": string, optional short closing sentence before sign-off (can be empty string)
 - "signature": string, candidate full name only
 
-Rules: Use ONLY the contact info from CANDIDATE CONTACT INFO. Never add URLs, LinkedIn, GitHub. No placeholder text. If info is missing, omit or use "Hiring Manager" / leave line empty. Write complete professional sentences."""
+Detail level: Write slightly more detailed paragraphs. Name specific technologies, projects, and results from the resume when they fit the job. Avoid generic filler; use the resume to make the letter concrete and specific while staying concise.
+
+CRITICAL - Resume-only rule: Do NOT say anything that is not on the candidate's resume. Every company name, job title, project name, metric (e.g. percentages), technology, and experience you mention MUST appear explicitly in the RESUME section below. If a fact is not in the resume, do not write it. Do not infer, assume, or invent details. When in doubt, omit the claim or phrase it in general terms using only words that appear in the resume.
+
+Other rules: Use ONLY the contact info from CANDIDATE CONTACT INFO. Never add URLs, LinkedIn, GitHub. No placeholder text. If info is missing, omit or use "Hiring Manager" / leave line empty. Write complete professional sentences."""
 
 
 def generate_cover_letter_sections(resume_text: str, job_description: str) -> dict:
@@ -363,7 +366,7 @@ Company: {company_info.get('company_name', 'Unknown')}
 Description: {company_info.get('description', 'Not available')}
 === END ===
 
-=== RESUME (experience/skills only) ===
+=== RESUME (ONLY use facts that appear here; do not mention any company, project, or metric not listed) ===
 {resume_text[:6000]}
 === END ===
 
@@ -372,7 +375,7 @@ Description: {company_info.get('description', 'Not available')}
 === END ===
 """
 
-    user_message = company_context + "\nOutput the cover letter as JSON with keys: addressee, greeting, intro, body_1, body_2, closing, signature."
+    user_message = company_context + "\nOutput the cover letter as JSON with keys: addressee, greeting, intro, body (array of exactly 2 paragraph strings), closing, signature. Write slightly more detailed intro and body paragraphs—name specific technologies and projects from the resume where relevant. Remember: do not say anything that is not explicitly in the RESUME section above."
 
     response = client.models.generate_content(
         model="gemini-2.0-flash",
@@ -393,7 +396,17 @@ Description: {company_info.get('description', 'Not available')}
         text = "\n".join(lines)
     parsed = json.loads(text)
 
-    # Normalize keys and ensure strings; add date and sincerely so everything is editable
+    # Normalize body to list of paragraphs
+    raw_body = parsed.get("body")
+    if isinstance(raw_body, list):
+        body_list = [str(p).strip() for p in raw_body if p]
+    else:
+        b1 = (parsed.get("body_1") or "").strip()
+        b2 = (parsed.get("body_2") or "").strip()
+        body_list = [b1, b2] if b2 else ([b1] if b1 else [])
+    if not body_list:
+        body_list = [""]  # at least one empty paragraph
+
     today = datetime.now().strftime("%B %d, %Y")
     sections = {
         "date": today,
@@ -402,13 +415,133 @@ Description: {company_info.get('description', 'Not available')}
         "addressee": (parsed.get("addressee") or "").replace("\\n", "\n"),
         "greeting": parsed.get("greeting") or "Dear Hiring Manager,",
         "intro": parsed.get("intro") or "",
-        "body_1": parsed.get("body_1") or "",
-        "body_2": parsed.get("body_2") or "",
+        "body": body_list,
         "closing": parsed.get("closing") or "",
         "sincerely": "Sincerely yours,",
         "signature": parsed.get("signature") or contact_info.get("name", "Candidate"),
     }
     return sections
+
+
+INAPPROPRIATE_GUARDRAIL_PROMPT = """You are a content guardrail. Reply with exactly one word: YES or NO.
+
+Reply NO only if the user message is inappropriate (offensive, harmful, harassing, or completely unrelated to editing a cover letter in this app—e.g. asking for weather, recipes, or other unrelated tasks). Be relaxed: if the message could reasonably be interpreted as a request about the cover letter or the letter content, reply YES. Vague or creative edit requests are fine.
+
+User message: """
+
+
+def is_cover_letter_related(instruction: str) -> bool:
+    """Return False only if the instruction is inappropriate; otherwise allow through."""
+    if not (instruction or "").strip():
+        return False
+    instruction = instruction.strip()[:500]
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=INAPPROPRIATE_GUARDRAIL_PROMPT + instruction,
+            config={"temperature": 0},
+        )
+        text = (response.text or "").strip().upper()
+        # NO = inappropriate, reject. YES or anything else = allow.
+        return not text.startswith("NO")
+    except Exception:
+        return True  # on error, allow the request through
+
+
+EDIT_BY_INSTRUCTION_PROMPT = """You are an expert editor. Given the current cover letter sections (as JSON) and a user edit instruction, output ONLY a single JSON object with the revised sections. Always output valid JSON.
+
+Output the same keys as the input: addressee, greeting, intro, body (array of paragraph strings), closing, signature.
+- Apply the user's edit instruction when you can. When the request is vague (e.g. "make it better"), make a reasonable improvement. When you cannot fulfill the request (e.g. too vague, not in the resume, or unclear), return the same sections unchanged—the UI will show a friendly message asking the user to be more specific.
+- Preserve structure when appropriate: if body had 2 paragraphs, keep 2 unless the instruction clearly asks for more or fewer.
+- Do not hallucinate: Any company name, project name, metric, technology, or experience you add must appear in the CANDIDATE RESUME section. Do not invent or assume details.
+- No markdown, no code fences, no explanation. Output only the JSON object."""
+
+
+def edit_letter_by_instruction(
+    sections: dict, instruction: str, resume_text: str = "", chat_history: list[dict] | None = None
+) -> dict:
+    """
+    Propose revised cover letter sections based on user instruction.
+    Returns full sections dict (proposed); frontend may diff and accept/reject.
+    chat_history: list of {"role": "user"|"assistant", "content": str} for context.
+    """
+    chat_history = chat_history or []
+    # Build a compact representation of current sections for the prompt
+    body = sections.get("body")
+    if isinstance(body, list):
+        body_str = json.dumps(body, ensure_ascii=False)
+    else:
+        body_str = json.dumps([sections.get("body_1") or "", sections.get("body_2") or ""], ensure_ascii=False)
+    current = {
+        "addressee": sections.get("addressee") or "",
+        "greeting": sections.get("greeting") or "",
+        "intro": sections.get("intro") or "",
+        "body": body if isinstance(body, list) else [sections.get("body_1") or "", sections.get("body_2") or ""],
+        "closing": sections.get("closing") or "",
+        "signature": sections.get("signature") or "",
+    }
+    current_json = json.dumps(current, ensure_ascii=False, indent=2)
+
+    resume_block = ""
+    if resume_text and resume_text.strip():
+        resume_block = f"""
+=== CANDIDATE RESUME (only use facts from here; do not invent projects or details) ===
+{resume_text[:8000]}
+=== END ===
+
+"""
+
+    history_block = ""
+    if chat_history:
+        lines = []
+        for m in chat_history[-6:]:  # last 3 exchanges
+            role = (m.get("role") or "user").capitalize()
+            content = (m.get("content") or "").strip()
+            if content:
+                lines.append(f"{role}: {content}")
+        if lines:
+            history_block = "\n=== RECENT CONVERSATION ===\n" + "\n".join(lines) + "\n=== END ===\n\n"
+
+    user_message = f"""Current cover letter sections (JSON):
+{current_json}
+{resume_block}{history_block}User edit instruction: {instruction}
+
+Apply the instruction and output the revised sections as a JSON object with keys: addressee, greeting, intro, body (array of strings), closing, signature. Only use facts from the resume above; do not invent any details. If you cannot help with this request, return the same sections unchanged."""
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=user_message,
+        config={
+            "system_instruction": EDIT_BY_INSTRUCTION_PROMPT,
+            "temperature": 0.3,
+        },
+    )
+    text = response.text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines[-1].strip() == "```":
+            lines = lines[1:-1]
+        else:
+            lines = lines[1:]
+        text = "\n".join(lines)
+    parsed = json.loads(text)
+
+    # Merge with existing sections so we preserve date, sender_name, sender_email, sincerely
+    body_list = parsed.get("body")
+    if isinstance(body_list, list):
+        body_list = [str(p).strip() for p in body_list]
+    else:
+        body_list = [""]
+    proposed = {
+        **sections,
+        "addressee": (parsed.get("addressee") or sections.get("addressee") or "").replace("\\n", "\n"),
+        "greeting": parsed.get("greeting") or sections.get("greeting") or "",
+        "intro": parsed.get("intro") or sections.get("intro") or "",
+        "body": body_list,
+        "closing": parsed.get("closing") or sections.get("closing") or "",
+        "signature": parsed.get("signature") or sections.get("signature") or "",
+    }
+    return proposed
 
 
 def format_job_for_prompt(job_data: dict) -> str:
