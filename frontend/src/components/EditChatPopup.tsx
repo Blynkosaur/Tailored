@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import { MessageCircle, X } from "lucide-react";
+import { TypingDots } from "./TypingDots";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -101,6 +102,11 @@ export function EditChatPopup({
                 </span>
               </div>
             ))}
+            {isEditLoading && (
+              <div className="text-sm text-left">
+                <TypingDots />
+              </div>
+            )}
             <div ref={messagesEndRef} />
             {hasPendingChanges && (
               <div className="flex gap-2 border-t border-border pt-3">

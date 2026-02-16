@@ -7,16 +7,16 @@ export function TypingDots({ className = "" }: { className?: string }) {
       aria-hidden
     >
       <span
-        className="h-1 w-1 rounded-full bg-gray-400 animate-typing-dot"
+        className="h-1 w-1 rounded-full bg-gray-400 animate-typing-dot animate-typing-dot-bounce"
         style={{ animationDelay: "0s" }}
       />
       <span
-        className="h-1 w-1 rounded-full bg-gray-400 animate-typing-dot"
-        style={{ animationDelay: "0.2s" }}
+        className="h-1 w-1 rounded-full bg-gray-400 animate-typing-dot animate-typing-dot-bounce"
+        style={{ animationDelay: "0.15s" }}
       />
       <span
-        className="h-1 w-1 rounded-full bg-gray-400 animate-typing-dot"
-        style={{ animationDelay: "0.4s" }}
+        className="h-1 w-1 rounded-full bg-gray-400 animate-typing-dot animate-typing-dot-bounce"
+        style={{ animationDelay: "0.3s" }}
       />
     </span>
   );

@@ -155,6 +155,19 @@
   animation: typing-dot 1.2s ease-in-out infinite;
 }
 
+@keyframes typing-dot-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-typing-dot-bounce {
+  animation: typing-dot-bounce 1.2s ease-in-out infinite;
+}
+
 @keyframes chat-popup-enter {
   from {
     opacity: 0;
