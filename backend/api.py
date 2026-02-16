@@ -26,6 +26,7 @@ from main import (
     JobInfoError,
 )
 from scraper import scrape_job_posting
+from embeddings import embed_and_store_letter
 
 # Thread pool for running sync functions
 executor = ThreadPoolExecutor(max_workers=4)
@@ -350,6 +351,14 @@ class LatexBody(BaseModel):
     sections: dict
 
 
+class EmbedRequest(BaseModel):
+    sections: dict  # letter sections (same shape as compile/edit)
+
+
+class EmbedResponse(BaseModel):
+    id: str | None  # template id in RDS, or None if not stored
+
+
 class ChatMessage(BaseModel):
     role: str  # "user" | "assistant"
     content: str
@@ -398,6 +407,28 @@ async def edit_letter(
     except Exception as e:
         print(f"Edit error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/embed", response_model=EmbedResponse)
+async def embed_letter(
+    body: EmbedRequest,
+    _: HTTPAuthorizationCredentials = Depends(verify_token),
+):
+    """
+    Anonymize the given letter sections, embed, and store in RDS (pgvector).
+    Call this when the user downloads the PDF to save the template for future retrieval.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        template_id = await loop.run_in_executor(
+            executor,
+            embed_and_store_letter,
+            body.sections,
+        )
+        return EmbedResponse(id=template_id)
+    except Exception as e:
+        print(f"Embed error: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred.")
 
 
 @app.post("/latex", response_model=LatexResponse)
