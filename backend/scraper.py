@@ -1,21 +1,30 @@
 from playwright.sync_api import sync_playwright
+from browserbase import Browserbase
+from dotenv import load_dotenv
 import json
+import os
 import re
+
+load_dotenv()
 
 
 def fetch_page_text(url: str, timeout: int = 30000) -> tuple[str, dict]:
     """Fetch fully rendered page and extract all visible text + JSON-LD data."""
+    bb = Browserbase(api_key=os.environ.get("BROWSERBASE_API_KEY"))
+    session = bb.sessions.create(project_id=os.environ.get("BROWSERBASE_PROJECT_ID"))
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        browser = p.chromium.connect_over_cdp(session.connect_url)
+        context = browser.contexts[0]
+        page = context.pages[0]
         page.set_default_timeout(timeout)
-        
+
         # Navigate and wait for DOM to be ready
         page.goto(url, wait_until="domcontentloaded", timeout=timeout)
-        
+
         # Short wait for JS to render content
         page.wait_for_timeout(3000)
-        
+
         # Get all visible text from the page
         visible_text = page.evaluate("""
             () => {
@@ -27,23 +36,23 @@ def fetch_page_text(url: str, timeout: int = 30000) -> tuple[str, dict]:
                         acceptNode: function(node) {
                             const parent = node.parentElement;
                             if (!parent) return NodeFilter.FILTER_REJECT;
-                            
+
                             const tag = parent.tagName.toLowerCase();
                             if (['script', 'style', 'noscript', 'iframe'].includes(tag)) {
                                 return NodeFilter.FILTER_REJECT;
                             }
-                            
+
                             // Check if element is visible
                             const style = window.getComputedStyle(parent);
                             if (style.display === 'none' || style.visibility === 'hidden') {
                                 return NodeFilter.FILTER_REJECT;
                             }
-                            
+
                             return NodeFilter.FILTER_ACCEPT;
                         }
                     }
                 );
-                
+
                 const textParts = [];
                 while (walker.nextNode()) {
                     const text = walker.currentNode.textContent.trim();
@@ -52,7 +61,7 @@ def fetch_page_text(url: str, timeout: int = 30000) -> tuple[str, dict]:
                 return textParts.join('\\n');
             }
         """)
-        
+
         # Also try to get JSON-LD data for structured info (title, company, location)
         json_ld_data = {}
         try:
@@ -61,9 +70,9 @@ def fetch_page_text(url: str, timeout: int = 30000) -> tuple[str, dict]:
                 json_ld_data = json.loads(json_ld_script.inner_text())
         except:
             pass
-        
+
         browser.close()
-    
+
     return visible_text, json_ld_data
 
 
