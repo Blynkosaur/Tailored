@@ -1,18 +1,27 @@
 from playwright.sync_api import sync_playwright
+from browserbase import Browserbase
+from dotenv import load_dotenv
 import json
+import os
 import re
+
+load_dotenv()
 
 
 def fetch_page_text(url: str, timeout: int = 30000) -> tuple[str, dict]:
     """Fetch fully rendered page and extract all visible text + JSON-LD data."""
+    bb = Browserbase(api_key=os.environ.get("BROWSERBASE_API_KEY"))
+    session = bb.sessions.create(project_id=os.environ.get("BROWSERBASE_PROJECT_ID"))
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        browser = p.chromium.connect_over_cdp(session.connect_url)
+        context = browser.contexts[0]
+        page = context.pages[0]
         page.set_default_timeout(timeout)
-        
+
         # Navigate and wait for DOM to be ready
         page.goto(url, wait_until="domcontentloaded", timeout=timeout)
-        
+
         # Short wait for JS to render content
         page.wait_for_timeout(3000)
         
