@@ -31,37 +31,39 @@ client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 class JobInfoError(Exception):
     """Raised when company or role cannot be detected from job description."""
+
     pass
 
 
 def extract_contact_info(resume_text: str) -> dict:
     """
     Extract name, email, and phone from resume using regex.
-    
+
     Args:
         resume_text: The resume text content.
-        
+
     Returns:
         Dictionary with name, email, and phone.
     """
     import re
-    
+
     # Extract email using regex
-    email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+    email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
     email_matches = re.findall(email_pattern, resume_text)
-    
+
     # Filter out emails that look like URLs or are LinkedIn/GitHub
     email = None
     for match in email_matches:
-        if 'linkedin' not in match.lower() and 'github' not in match.lower():
+        if "linkedin" not in match.lower() and "github" not in match.lower():
             email = match
             break
-    
+
     # Extract phone using regex
     phone_patterns = [
-        r'\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}',  # (123) 456-7890, 123-456-7890, +1 123 456 7890
-        r'\d{3}[-.\s]\d{3}[-.\s]\d{4}',  # 123-456-7890
-        r'\(\d{3}\)\s*\d{3}[-.\s]?\d{4}',  # (123) 456-7890
+        # (123) 456-7890, 123-456-7890, +1 123 456 7890
+        r"\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}",
+        r"\d{3}[-.\s]\d{3}[-.\s]\d{4}",  # 123-456-7890
+        r"\(\d{3}\)\s*\d{3}[-.\s]?\d{4}",  # (123) 456-7890
     ]
     phone = None
     for pattern in phone_patterns:
@@ -69,36 +71,36 @@ def extract_contact_info(resume_text: str) -> dict:
         if phone_matches:
             phone = phone_matches[0].strip()
             break
-    
+
     # Extract name - assume it's the first line or first capitalized words
-    lines = resume_text.strip().split('\n')
+    lines = resume_text.strip().split("\n")
     name = "Candidate"
     for line in lines[:5]:  # Check first 5 lines
         line = line.strip()
         # Skip empty lines and lines that look like contact info
-        if not line or '@' in line or 'http' in line.lower() or line.isdigit():
+        if not line or "@" in line or "http" in line.lower() or line.isdigit():
             continue
         # Take first non-empty line that looks like a name
         if len(line) < 50 and not any(c.isdigit() for c in line):
             name = line
             break
-    
+
     # Capitalize name properly (First Letter Of Each Word)
-    name = ' '.join(word.capitalize() for word in name.split())
-    
+    name = " ".join(word.capitalize() for word in name.split())
+
     return {"name": name, "email": email, "phone": phone}
 
 
 def get_company_info(job_description: str) -> dict:
     """
     Call Gemini API to extract company name, role, and research what the company does.
-    
+
     Args:
         job_description: The job posting description containing company name.
-        
+
     Returns:
         Dictionary with company name, role, and description.
-        
+
     Raises:
         JobInfoError: If company or role cannot be detected.
     """
@@ -136,7 +138,7 @@ IMPORTANT:
 {job_description}"""
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-3-flash-preview",
         contents=user_message,
         config={
             "system_instruction": system_prompt,
@@ -146,7 +148,7 @@ IMPORTANT:
 
     # Parse the JSON response
     response_text = response.text.strip()
-    
+
     # Strip markdown code fences if present
     if response_text.startswith("```"):
         lines = response_text.split("\n")
@@ -155,45 +157,69 @@ IMPORTANT:
         else:
             lines = lines[1:]
         response_text = "\n".join(lines)
-    
+
     try:
         company_info = json.loads(response_text)
     except json.JSONDecodeError:
         raise JobInfoError("Failed to parse job information")
-    
+
     # Validate company name
     company_name = company_info.get("company_name")
     invalid_company_names = [
-        "null", "none", "unknown", "not found", "not specified", 
-        "n/a", "na", "the company", "company", "company name",
-        "company name here", "[company]", "[company name]"
+        "null",
+        "none",
+        "unknown",
+        "not found",
+        "not specified",
+        "n/a",
+        "na",
+        "the company",
+        "company",
+        "company name",
+        "company name here",
+        "[company]",
+        "[company name]",
     ]
     if not company_name or company_name.lower().strip() in invalid_company_names:
-        raise JobInfoError("Could not detect company name from the job description. Please include the company name.")
-    
+        raise JobInfoError(
+            "Could not detect company name from the job description. Please include the company name."
+        )
+
     # Validate role
     role = company_info.get("role")
     invalid_role_names = [
-        "null", "none", "unknown", "not found", "not specified",
-        "n/a", "na", "the role", "role", "job title",
-        "job title here", "[role]", "[job title]"
+        "null",
+        "none",
+        "unknown",
+        "not found",
+        "not specified",
+        "n/a",
+        "na",
+        "the role",
+        "role",
+        "job title",
+        "job title here",
+        "[role]",
+        "[job title]",
     ]
     if not role or role.lower().strip() in invalid_role_names:
-        raise JobInfoError("Could not detect job role/title from the job description. Please include the job title.")
-    
+        raise JobInfoError(
+            "Could not detect job role/title from the job description. Please include the job title."
+        )
+
     return company_info
 
 
 def compile_latex(latex_content: str) -> bytes:
     """
     Compile LaTeX content to PDF.
-    
+
     Args:
         latex_content: The LaTeX source code to compile.
-        
+
     Returns:
         The compiled PDF as bytes.
-        
+
     Raises:
         Exception: If LaTeX compilation fails.
     """
@@ -231,13 +257,13 @@ def compile_latex(latex_content: str) -> bytes:
 def generate_cover_letter_latex(resume_text: str, job_description: str) -> str:
     """
     Call Gemini API to generate LaTeX cover letter code.
-    
+
     First extracts contact info and company description, then generates the cover letter.
-    
+
     Args:
         resume_text: The candidate's resume as plain text.
         job_description: The job posting description.
-        
+
     Returns:
         LaTeX source code for the cover letter.
     """
@@ -247,21 +273,21 @@ def generate_cover_letter_latex(resume_text: str, job_description: str) -> str:
     print(f"   Name: {contact_info.get('name', 'Unknown')}")
     print(f"   Email: {contact_info.get('email', 'Not found')}")
     print(f"   Phone: {contact_info.get('phone', 'Not found')}")
-    
+
     # First call: Get company description
     print("Researching company description...")
     company_info = get_company_info(job_description)
     print(f"   Company: {company_info.get('company_name', 'Unknown')}")
     print(f"   Description: {company_info.get('description', 'N/A')[:100]}...")
-    
+
     # Build contact info section - name, email, and phone if available
     contact_lines = [f"Name: {contact_info.get('name', 'Candidate')}"]
-    if contact_info.get('email'):
+    if contact_info.get("email"):
         contact_lines.append(f"Email: {contact_info['email']}")
-    if contact_info.get('phone'):
+    if contact_info.get("phone"):
         contact_lines.append(f"Phone: {contact_info['phone']}")
     contact_section = "\n".join(contact_lines)
-    
+
     # Build company context section
     company_context = f"""=== CANDIDATE CONTACT INFO (use ONLY this for contact details) ===
 {contact_section}
@@ -270,14 +296,14 @@ NOTE: Use ONLY the contact info listed above. Do NOT add any other contact info,
 === END OF CONTACT INFO ===
 
 === COMPANY RESEARCH (use this to personalize the cover letter) ===
-Company Name: {company_info.get('company_name', 'Unknown')}
+Company Name: {company_info.get("company_name", "Unknown")}
 
-Company Description: {company_info.get('description', 'Not available')}
+Company Description: {company_info.get("description", "Not available")}
 
 === END OF COMPANY RESEARCH ===
 
 """
-    
+
     # Third call: Generate the cover letter with company context
     user_message = f"""{company_context}=== CANDIDATE'S RESUME (use this for work experience and skills ONLY, not contact info) ===
 {resume_text}
@@ -289,11 +315,11 @@ Company Description: {company_info.get('description', 'Not available')}
 
 === END OF JOB DESCRIPTION ===
 
-Generate a cover letter for the CANDIDATE applying to the JOB above. 
+Generate a cover letter for the CANDIDATE applying to the JOB above.
 IMPORTANT: For contact info, use ONLY what is provided in the CANDIDATE CONTACT INFO section above. Do NOT extract contact info from the resume."""
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-3-flash-preview",
         contents=user_message,
         config={
             "system_instruction": COVER_LETTER_SYSTEM_PROMPT,
@@ -314,12 +340,12 @@ IMPORTANT: For contact info, use ONLY what is provided in the CANDIDATE CONTACT 
 
     # Fix common LaTeX escaping issues
     # Escape & that aren't already escaped (not preceded by \)
-    latex_content = re.sub(r'(?<!\\)&', r'\\&', latex_content)
+    latex_content = re.sub(r"(?<!\\)&", r"\\&", latex_content)
     # Escape % only when it appears after a digit (like "26%") - not at end of lines
-    latex_content = re.sub(r'(\d)%', r'\1\\%', latex_content)
+    latex_content = re.sub(r"(\d)%", r"\1\\%", latex_content)
     # Fix double escapes that might have been created
-    latex_content = latex_content.replace('\\\\&', '\\&')
-    latex_content = latex_content.replace('\\\\%', '\\%')
+    latex_content = latex_content.replace("\\\\&", "\\&")
+    latex_content = latex_content.replace("\\\\%", "\\%")
 
     return latex_content
 
@@ -352,18 +378,20 @@ def generate_cover_letter_sections(resume_text: str, job_description: str) -> di
     print("Researching company description...")
     company_info = get_company_info(job_description)
 
-    contact_section = "\n".join([
-        f"Name: {contact_info.get('name', 'Candidate')}",
-        *([f"Email: {contact_info['email']}"] if contact_info.get("email") else []),
-        *([f"Phone: {contact_info['phone']}"] if contact_info.get("phone") else []),
-    ])
+    contact_section = "\n".join(
+        [
+            f"Name: {contact_info.get('name', 'Candidate')}",
+            *([f"Email: {contact_info['email']}"] if contact_info.get("email") else []),
+            *([f"Phone: {contact_info['phone']}"] if contact_info.get("phone") else []),
+        ]
+    )
     company_context = f"""=== CANDIDATE CONTACT INFO (use ONLY this) ===
 {contact_section}
 === END ===
 
 === COMPANY RESEARCH ===
-Company: {company_info.get('company_name', 'Unknown')}
-Description: {company_info.get('description', 'Not available')}
+Company: {company_info.get("company_name", "Unknown")}
+Description: {company_info.get("description", "Not available")}
 === END ===
 
 === RESUME (ONLY use facts that appear here; do not mention any company, project, or metric not listed) ===
@@ -375,10 +403,13 @@ Description: {company_info.get('description', 'Not available')}
 === END ===
 """
 
-    user_message = company_context + "\nOutput the cover letter as JSON with keys: addressee, greeting, intro, body (array of exactly 2 paragraph strings), closing, signature. Write slightly more detailed intro and body paragraphs—name specific technologies and projects from the resume where relevant. Remember: do not say anything that is not explicitly in the RESUME section above."
+    user_message = (
+        company_context
+        + "\nOutput the cover letter as JSON with keys: addressee, greeting, intro, body (array of exactly 2 paragraph strings), closing, signature. Write slightly more detailed intro and body paragraphs—name specific technologies and projects from the resume where relevant. Remember: do not say anything that is not explicitly in the RESUME section above."
+    )
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-3-flash-preview",
         contents=user_message,
         config={
             "system_instruction": COVER_LETTER_SECTIONS_JSON_PROMPT,
@@ -437,7 +468,7 @@ def is_cover_letter_related(instruction: str) -> bool:
     instruction = instruction.strip()[:500]
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
             contents=INAPPROPRIATE_GUARDRAIL_PROMPT + instruction,
             config={"temperature": 0},
         )
@@ -458,7 +489,10 @@ Output the same keys as the input: addressee, greeting, intro, body (array of pa
 
 
 def edit_letter_by_instruction(
-    sections: dict, instruction: str, resume_text: str = "", chat_history: list[dict] | None = None
+    sections: dict,
+    instruction: str,
+    resume_text: str = "",
+    chat_history: list[dict] | None = None,
 ) -> dict:
     """
     Propose revised cover letter sections based on user instruction.
@@ -471,12 +505,17 @@ def edit_letter_by_instruction(
     if isinstance(body, list):
         body_str = json.dumps(body, ensure_ascii=False)
     else:
-        body_str = json.dumps([sections.get("body_1") or "", sections.get("body_2") or ""], ensure_ascii=False)
+        body_str = json.dumps(
+            [sections.get("body_1") or "", sections.get("body_2") or ""],
+            ensure_ascii=False,
+        )
     current = {
         "addressee": sections.get("addressee") or "",
         "greeting": sections.get("greeting") or "",
         "intro": sections.get("intro") or "",
-        "body": body if isinstance(body, list) else [sections.get("body_1") or "", sections.get("body_2") or ""],
+        "body": body
+        if isinstance(body, list)
+        else [sections.get("body_1") or "", sections.get("body_2") or ""],
         "closing": sections.get("closing") or "",
         "signature": sections.get("signature") or "",
     }
@@ -500,7 +539,11 @@ def edit_letter_by_instruction(
             if content:
                 lines.append(f"{role}: {content}")
         if lines:
-            history_block = "\n=== RECENT CONVERSATION ===\n" + "\n".join(lines) + "\n=== END ===\n\n"
+            history_block = (
+                "\n=== RECENT CONVERSATION ===\n"
+                + "\n".join(lines)
+                + "\n=== END ===\n\n"
+            )
 
     user_message = f"""Current cover letter sections (JSON):
 {current_json}
@@ -509,7 +552,7 @@ def edit_letter_by_instruction(
 Apply the instruction and output the revised sections as a JSON object with keys: addressee, greeting, intro, body (array of strings), closing, signature. Only use facts from the resume above; do not invent any details. If you cannot help with this request, return the same sections unchanged."""
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-3-flash-preview",
         contents=user_message,
         config={
             "system_instruction": EDIT_BY_INSTRUCTION_PROMPT,
@@ -534,7 +577,9 @@ Apply the instruction and output the revised sections as a JSON object with keys
         body_list = [""]
     proposed = {
         **sections,
-        "addressee": (parsed.get("addressee") or sections.get("addressee") or "").replace("\\n", "\n"),
+        "addressee": (
+            parsed.get("addressee") or sections.get("addressee") or ""
+        ).replace("\\n", "\n"),
         "greeting": parsed.get("greeting") or sections.get("greeting") or "",
         "intro": parsed.get("intro") or sections.get("intro") or "",
         "body": body_list,
@@ -547,15 +592,15 @@ Apply the instruction and output the revised sections as a JSON object with keys
 def format_job_for_prompt(job_data: dict) -> str:
     """
     Format scraped job data into a string for the LLM prompt.
-    
+
     Args:
         job_data: The scraped job posting data.
-        
+
     Returns:
         Formatted job description string.
     """
     parts = []
-    
+
     if job_data.get("title"):
         parts.append(f"Job Title: {job_data['title']}")
     if job_data.get("company"):
@@ -564,38 +609,42 @@ def format_job_for_prompt(job_data: dict) -> str:
         parts.append(f"Location: {job_data['location']}")
     if job_data.get("work_arrangement"):
         parts.append(f"Work Arrangement: {job_data['work_arrangement']}")
-    
+
     if job_data.get("about_company"):
-        parts.append(f"\nAbout the Company:\n" + "\n".join(job_data["about_company"][:3]))
-    
+        parts.append(
+            f"\nAbout the Company:\n" + "\n".join(job_data["about_company"][:3])
+        )
+
     if job_data.get("responsibilities"):
         parts.append(f"\nResponsibilities:")
         for item in job_data["responsibilities"]:
             parts.append(f"• {item}")
-    
+
     if job_data.get("requirements"):
         parts.append(f"\nRequirements:")
         for item in job_data["requirements"]:
             parts.append(f"• {item}")
-    
+
     if job_data.get("preferred_qualifications"):
         parts.append(f"\nPreferred Qualifications:")
         for item in job_data["preferred_qualifications"]:
             parts.append(f"• {item}")
-    
+
     if job_data.get("skills_mentioned"):
         parts.append(f"\nSkills Mentioned: {', '.join(job_data['skills_mentioned'])}")
-    
+
     # If we didn't extract much structured data, fall back to raw text
-    has_content = any([
-        job_data.get("responsibilities"),
-        job_data.get("requirements"),
-        job_data.get("about_company"),
-    ])
+    has_content = any(
+        [
+            job_data.get("responsibilities"),
+            job_data.get("requirements"),
+            job_data.get("about_company"),
+        ]
+    )
     if not has_content and job_data.get("raw_text"):
         # Use raw text if structured parsing failed
         parts.append(f"\nFull Job Posting Text:\n{job_data['raw_text'][:8000]}")
-    
+
     return "\n".join(parts)
 
 
@@ -606,44 +655,44 @@ def generate_cover_letter(
 ) -> Path:
     """
     Generate a tailored cover letter from a resume and job posting URL.
-    
+
     Args:
         resume_path: Path to the resume PDF.
         job_url: URL of the job posting to scrape.
         output_filename: Name for the output PDF file.
-        
+
     Returns:
         Path to the saved cover letter PDF.
     """
     print(f"Parsing resume: {resume_path}")
     resume_data = parse_resume(resume_path)
     resume_text = resume_data["text"]
-    
+
     print(f"Scraping job posting: {job_url}")
     job_data = scrape_job_posting(job_url)
     print(format_job_data(job_data))
-    
+
     job_description = format_job_for_prompt(job_data)
-    
+
     print(f"Generating cover letter with AI...")
     latex_content = generate_cover_letter_latex(resume_text, job_description)
-    
+
     print("\n" + "=" * 60)
     print("GENERATED LATEX:")
     print("=" * 60)
     print(latex_content)
     print("=" * 60 + "\n")
-    
+
     latex_debug_path = RESUME_DIR / "cover_letter_debug.tex"
     latex_debug_path.write_text(latex_content)
     print(f"LaTeX saved to: {latex_debug_path}")
-    
+
     print(f"Compiling LaTeX to PDF...")
     pdf_bytes = compile_latex(latex_content)
-    
+
     output_path = RESUME_DIR / output_filename
     output_path.write_bytes(pdf_bytes)
-    
+
     print(f"Cover letter saved to: {output_path}")
     return output_path
 
@@ -655,53 +704,53 @@ def generate_cover_letter_from_text(
 ) -> Path:
     """
     Generate a tailored cover letter from a resume and job description text.
-    
+
     Args:
         resume_path: Path to the resume PDF.
         job_description: The job posting as plain text.
         output_filename: Name for the output PDF file.
-        
+
     Returns:
         Path to the saved cover letter PDF.
     """
     print(f"Parsing resume: {resume_path}")
     resume_data = parse_resume(resume_path)
     resume_text = resume_data["text"]
-    
+
     print(f"Generating cover letter with AI...")
     latex_content = generate_cover_letter_latex(resume_text, job_description)
-    
+
     print(f"Compiling LaTeX to PDF...")
     pdf_bytes = compile_latex(latex_content)
-    
+
     output_path = RESUME_DIR / output_filename
     output_path.write_bytes(pdf_bytes)
-    
+
     print(f"Cover letter saved to: {output_path}")
     return output_path
 
 
 if __name__ == "__main__":
     import sys
-    
+
     resume_files = list(RESUME_DIR.glob("*.pdf"))
     resume_files = [f for f in resume_files if "cover_letter" not in f.name.lower()]
-    
+
     if not resume_files:
         print(f"No resume PDF found in {RESUME_DIR}")
         sys.exit(1)
-    
+
     resume_path = resume_files[0]
     print(f"Using resume: {resume_path.name}")
-    
+
     if len(sys.argv) > 1:
         job_url = sys.argv[1]
     else:
         job_url = input("Enter job posting URL: ").strip()
-    
+
     if not job_url:
         print("No job URL provided")
         sys.exit(1)
-    
+
     output_path = generate_cover_letter(resume_path, job_url)
     print(f"\nDone! Open {output_path} to view your cover letter.")
