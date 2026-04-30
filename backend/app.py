@@ -1,4 +1,6 @@
 import asyncio
+
+#
 import base64
 import io
 import os
@@ -67,8 +69,10 @@ app.add_middleware(
 
 class GenerateResponse(BaseModel):
     pdf: str  # base64 encoded PDF
-    sections: dict  # tokenized sections; body is list[str] for variable-length paragraphs
-    resume_text: str = ""  # parsed resume text for edit flow (ground edits in resume only)
+    # tokenized sections; body is list[str] for variable-length paragraphs
+    sections: dict
+    # parsed resume text for edit flow (ground edits in resume only)
+    resume_text: str = ""
     date: str = ""
     sender_block: str = ""
     addressee_tex: str = ""
@@ -91,14 +95,24 @@ class LatexResponse(BaseModel):
 
 # Template-to-token: load once
 _TEMPLATE_PATH = Path(__file__).parent / "cover_letter_template.tex"
-_COVER_LETTER_TEMPLATE = _TEMPLATE_PATH.read_text(encoding="utf-8") if _TEMPLATE_PATH.exists() else ""
+_COVER_LETTER_TEMPLATE = (
+    _TEMPLATE_PATH.read_text(encoding="utf-8") if _TEMPLATE_PATH.exists() else ""
+)
 
 
 def _escape_latex(s: str) -> str:
     if not s:
         return ""
     s = s.replace("\\", "\\textbackslash ")
-    for char, repl in [("&", "\\&"), ("%", "\\%"), ("#", "\\#"), ("$", "\\$"), ("_", "\\_"), ("{", "\\{"), ("}", "\\}")]:
+    for char, repl in [
+        ("&", "\\&"),
+        ("%", "\\%"),
+        ("#", "\\#"),
+        ("$", "\\$"),
+        ("_", "\\_"),
+        ("{", "\\{"),
+        ("}", "\\}"),
+    ]:
         s = s.replace(char, repl)
     return s
 
@@ -127,7 +141,9 @@ def _sections_to_template_fields(sections: dict) -> dict:
         sender_block = sender_name + "\n" + sender_email
 
     addressee = sections.get("addressee") or ""
-    addressee_tex = "\n".join(line.strip() for line in addressee.split("\n") if line.strip())
+    addressee_tex = "\n".join(
+        line.strip() for line in addressee.split("\n") if line.strip()
+    )
     body_list = _normalize_body(sections)
 
     return {
@@ -152,10 +168,16 @@ def build_tex_from_sections(sections: dict) -> str:
         sender_block = sender_name + " \\\\\n  " + sender_email
 
     addressee = sections.get("addressee") or ""
-    addressee_tex = " \\\\\n  ".join(_escape_latex(line) for line in addressee.split("\n") if line.strip())
+    addressee_tex = " \\\\\n  ".join(
+        _escape_latex(line) for line in addressee.split("\n") if line.strip()
+    )
 
     body_list = _normalize_body(sections)
-    body_tex = "\n\n\\bigskip\n\n".join(_escape_latex(p) for p in body_list) if body_list else ""
+    body_tex = (
+        "\n\n\\bigskip\n\n".join(_escape_latex(p) for p in body_list)
+        if body_list
+        else ""
+    )
 
     replacements = {
         "sender_block": sender_block,
@@ -248,7 +270,7 @@ async def generate_cover_letter(
     Provide either job_url, job_description, or job_pdf (only one).
     """
     job_inputs = sum([bool(job_url), bool(job_description), job_pdf is not None])
-    
+
     if job_inputs == 0:
         raise HTTPException(
             status_code=400, detail="Provide job_url, job_description, or job_pdf"
@@ -256,7 +278,8 @@ async def generate_cover_letter(
 
     if job_inputs > 1:
         raise HTTPException(
-            status_code=400, detail="Provide only one of job_url, job_description, or job_pdf"
+            status_code=400,
+            detail="Provide only one of job_url, job_description, or job_pdf",
         )
 
     if not (resume.filename or "").lower().endswith(".pdf"):
@@ -332,6 +355,7 @@ async def compile_sections(
     """
     try:
         import json as _json
+
         section_dict = _json.loads(sections)
         logo_bytes = await logo.read() if logo else None
         latex_content = build_tex_from_sections(section_dict)
@@ -359,12 +383,14 @@ class EditRequest(BaseModel):
     instruction: str
     sections: dict
     resume_text: str | None = None  # parsed resume; edits must only use facts from this
-    chat_history: list[ChatMessage] | None = None  # last N messages for context
+    # last N messages for context
+    chat_history: list[ChatMessage] | None = None
 
 
 class EditResponse(BaseModel):
     sections: dict
-    message: str | None = None  # when set, frontend shows this instead of proposed changes (e.g. off-topic guardrail)
+    # when set, frontend shows this instead of proposed changes (e.g. off-topic guardrail)
+    message: str | None = None
 
 
 @app.post("/edit", response_model=EditResponse)
@@ -384,8 +410,12 @@ async def edit_letter(
             body.instruction,
         )
         if not is_related:
-            return EditResponse(sections=body.sections, message="I can't help you with that.")
-        history = [{"role": m.role, "content": m.content} for m in (body.chat_history or [])]
+            return EditResponse(
+                sections=body.sections, message="I can't help you with that."
+            )
+        history = [
+            {"role": m.role, "content": m.content} for m in (body.chat_history or [])
+        ]
         proposed = await loop.run_in_executor(
             executor,
             edit_letter_by_instruction,
